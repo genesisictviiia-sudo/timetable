@@ -40,7 +40,6 @@ function createRelaxationLevels() {
         ignoreClassTeacherFirst: false,
         ignoreMaxPerDay: false,
         ignoreMaxConsecutive: false,
-        ignoreTimeOff: false,
       },
     },
     {
@@ -50,7 +49,6 @@ function createRelaxationLevels() {
         ignoreClassTeacherFirst: false,
         ignoreMaxPerDay: false,
         ignoreMaxConsecutive: true,
-        ignoreTimeOff: false,
       },
     },
     {
@@ -60,7 +58,6 @@ function createRelaxationLevels() {
         ignoreClassTeacherFirst: false,
         ignoreMaxPerDay: true,
         ignoreMaxConsecutive: true,
-        ignoreTimeOff: false,
       },
     },
     {
@@ -70,17 +67,6 @@ function createRelaxationLevels() {
         ignoreClassTeacherFirst: true,
         ignoreMaxPerDay: true,
         ignoreMaxConsecutive: true,
-        ignoreTimeOff: false,
-      },
-    },
-    {
-      id: "relaxTimeOff",
-      label: "Teacher time off",
-      flags: {
-        ignoreClassTeacherFirst: true,
-        ignoreMaxPerDay: true,
-        ignoreMaxConsecutive: true,
-        ignoreTimeOff: true,
       },
     },
   ];
@@ -141,8 +127,9 @@ function buildAllowedTeacherSet(teachers, classLessonsMap, classId, classLabel, 
   return allowed;
 }
 
-function getTeacherTimeOffGrid(teacher, daysPerWeek, periodsPerDay) {
-  return normalizeTimeOffGrid(teacher.timeOffGrid, daysPerWeek, periodsPerDay, periodsPerDay);
+function getTeacherTimeOffGrid(teacher, daysPerWeek, periodsPerDay, totalPeriodSlots) {
+  const cols = totalPeriodSlots ?? periodsPerDay;
+  return normalizeTimeOffGrid(teacher.timeOffGrid, daysPerWeek, periodsPerDay, cols);
 }
 
 function maxConsecutiveRun(periods) {
@@ -166,7 +153,14 @@ function wouldExceedConsecutive(existingPeriods, newPeriod, limit) {
   return maxConsecutiveRun(next) > limit;
 }
 
-function createGeneratorState({ classes, daysPerWeek, periodsPerDay, teachers, constraints }) {
+function createGeneratorState({
+  classes,
+  daysPerWeek,
+  periodsPerDay,
+  totalPeriodSlots,
+  teachers,
+  constraints,
+}) {
   const classGrids = {};
   for (const cls of classes) {
     classGrids[cls.id] = emptyClassGrid(daysPerWeek, periodsPerDay);
@@ -178,7 +172,12 @@ function createGeneratorState({ classes, daysPerWeek, periodsPerDay, teachers, c
   const teacherTimeOff = {};
 
   for (const t of teachers) {
-    teacherTimeOff[t.name] = getTeacherTimeOffGrid(t, daysPerWeek, periodsPerDay);
+    teacherTimeOff[t.name] = getTeacherTimeOffGrid(
+      t,
+      daysPerWeek,
+      periodsPerDay,
+      totalPeriodSlots
+    );
     teacherDayCount[t.name] = Array(daysPerWeek).fill(0);
     teacherDayPeriods[t.name] = Array.from({ length: daysPerWeek }, () => []);
   }
@@ -215,8 +214,8 @@ function areTeachersFree(task, day, period, state) {
   return true;
 }
 
-function isTeacherAvailable(name, day, period, state, flags) {
-  if (flags.ignoreTimeOff) return true;
+/** True when the teacher is not marked unavailable for this day/period. */
+function isTeacherAvailable(name, day, period, state) {
   const grid = state.teacherTimeOff[name];
   if (!grid) return true;
   return Boolean(grid[day]?.[period]);
@@ -237,7 +236,7 @@ function canPlace(task, day, period, state, flags) {
   if (!areTeachersFree(task, day, period, state)) return false;
 
   for (const name of task.teachers) {
-    if (!isTeacherAvailable(name, day, period, state, flags)) return false;
+    if (!isTeacherAvailable(name, day, period, state)) return false;
     if (!passesDailyLimit(name, day, state, flags)) return false;
     if (!passesConsecutiveLimit(name, day, period, state, flags)) return false;
   }
@@ -252,7 +251,6 @@ function recordRelaxation(levelId, state) {
   if (levelId === "relaxConsecutive") state.relaxationsUsed.maxConsecutiveClassesPerDay += 1;
   if (levelId === "relaxMaxPerDay") state.relaxationsUsed.maxClassesPerDay += 1;
   if (levelId === "relaxClassTeacherFirst") state.relaxationsUsed.classTeacherFirstPeriod += 1;
-  if (levelId === "relaxTimeOff") state.relaxationsUsed.teacherTimeOff += 1;
 }
 
 function placeLesson(task, day, period, state, levelId) {
@@ -621,6 +619,7 @@ function runOneGeneration(data, attempt = 0) {
     classes,
     daysPerWeek,
     periodsPerDay,
+    totalPeriodSlots: data.totalPeriodSlots,
     teachers,
     constraints,
   });
@@ -774,6 +773,10 @@ export function validateTimetableInputs() {
   }
 
   const periodRows = Array.isArray(school.periods) ? school.periods : [];
+  const totalPeriodSlots =
+    periodRows.length > 0
+      ? Math.max(periodRows.length, periodsPerDay)
+      : periodsPerDay;
   const periodLabels = Array.from({ length: periodsPerDay }, (_, i) => {
     const lessonPeriods = periodRows.filter((p) => p.type !== "break");
     return lessonPeriods[i]?.name?.trim() || periodRows[i]?.name?.trim() || `P${i + 1}`;
@@ -800,6 +803,7 @@ export function validateTimetableInputs() {
       classLessonsMap,
       daysPerWeek,
       periodsPerDay,
+      totalPeriodSlots,
       periodsPerWeek,
       dayNames,
       dayLabels,

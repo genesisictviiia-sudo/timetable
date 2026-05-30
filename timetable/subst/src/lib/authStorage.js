@@ -1,5 +1,9 @@
+import { sendPasswordResetEmail } from "./sendResetEmail";
+
 const USERS_KEY = "subst.auth.users";
 const SESSION_KEY = "subst.auth.session";
+const RESET_KEY = "subst.auth.resetCodes";
+const RESET_TTL_MS = 15 * 60 * 1000;
 
 function readJson(key, fallback) {
   try {
@@ -121,4 +125,61 @@ export async function changePassword({ currentPassword, newPassword }) {
   record.salt = salt;
   record.hash = await hashPassword(newPassword, salt);
   writeJson(USERS_KEY, users);
+}
+
+function generateResetCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+/**
+ * Request a password reset code and email it to the user.
+ * From: admin.campusscheduler@gmail.com (via EmailJS) → To: entered email.
+ */
+export async function requestPasswordReset(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) throw new Error("Email is required.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw new Error("Please enter a valid email address.");
+  }
+  const users = getAllUsers();
+  if (!users[normalized]) throw new Error("No account found with that email.");
+
+  const code = generateResetCode();
+  const resets = readJson(RESET_KEY, {});
+  resets[normalized] = { code, expiresAt: Date.now() + RESET_TTL_MS };
+  writeJson(RESET_KEY, resets);
+
+  await sendPasswordResetEmail(normalized, code);
+
+  return { email: normalized };
+}
+
+export async function resetPasswordWithCode({ email, code, newPassword }) {
+  const normalized = normalizeEmail(email);
+  const trimmedCode = String(code || "").trim();
+  if (!trimmedCode) throw new Error("Reset code is required.");
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error("New password must be at least 6 characters.");
+  }
+
+  const resets = readJson(RESET_KEY, {});
+  const entry = resets[normalized];
+  if (!entry) throw new Error("No reset request found. Send a new code.");
+  if (Date.now() > entry.expiresAt) {
+    delete resets[normalized];
+    writeJson(RESET_KEY, resets);
+    throw new Error("Reset code has expired. Request a new one.");
+  }
+  if (entry.code !== trimmedCode) throw new Error("Invalid reset code.");
+
+  const users = getAllUsers();
+  const record = users[normalized];
+  if (!record) throw new Error("Account no longer exists.");
+
+  const salt = randomSalt();
+  record.salt = salt;
+  record.hash = await hashPassword(newPassword, salt);
+  writeJson(USERS_KEY, users);
+  delete resets[normalized];
+  writeJson(RESET_KEY, resets);
 }

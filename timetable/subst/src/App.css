@@ -70,6 +70,25 @@ body {
   color: var(--text-muted);
 }
 
+.top-bar-user__profile {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: inherit;
+  background: transparent;
+  border: none;
+  padding: 0.15rem 0.35rem;
+  margin: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.top-bar-user__profile:hover {
+  background: var(--accent-soft);
+}
+
 .top-bar-user__name {
   font-weight: 600;
   color: var(--text);
@@ -77,6 +96,20 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.user-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95em;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 4px rgba(61, 79, 95, 0.2);
 }
 
 .top-bar-user__btn {
@@ -2071,6 +2104,100 @@ td.warn {
   word-break: break-word;
 }
 
+.profile-settings-modal__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.profile-settings-modal__identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.profile-settings-modal__title {
+  margin: 0;
+  text-align: left;
+}
+
+.profile-settings-modal__email {
+  margin: 0.15rem 0 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.profile-section-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.profile-form--bordered {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.profile-settings-modal__footer {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.profile-forgot-wrap {
+  margin: 0.25rem 0 0;
+}
+
+.link-btn {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--accent);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-btn:hover {
+  color: var(--accent-hover);
+}
+
+.profile-reset-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+}
+
+.profile-reset-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.profile-reset-demo-code {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--text);
+}
+
+.profile-reset-demo-code__hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
 /* Print setup modal */
 .print-form {
   display: grid;
@@ -2089,6 +2216,35 @@ td.warn {
   grid-column: 1 / -1;
 }
 
+.print-field--radio {
+  border: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.print-field--radio .field-label {
+  margin-bottom: 6px;
+}
+
+.print-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.print-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.print-form__actions {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 520px) {
   .print-form {
     grid-template-columns: 1fr;
@@ -2101,11 +2257,6 @@ td.warn {
 }
 
 @media print {
-  @page {
-    size: A4;
-    margin: 14mm 12mm;
-  }
-
   body {
     background: #fff !important;
     background-image: none !important;
@@ -2124,25 +2275,91 @@ td.warn {
     font-family: var(--font-body);
   }
 
+  /* Printable height after @page margins (4mm × 2 sides = 8mm) */
+  .print-sheet--landscape {
+    --print-page-h: 210mm;
+    --print-page-w: 297mm;
+  }
+
+  .print-sheet--portrait {
+    --print-page-h: 297mm;
+    --print-page-w: 210mm;
+  }
+
+  .print-sheet--per-4 {
+    --print-margin-total: 8mm;
+    --print-timetable-gap: 30px;
+    --printable-h: calc(var(--print-page-h) - var(--print-margin-total));
+    --print-card-h: calc((var(--printable-h) - var(--print-timetable-gap)) / 2);
+    --print-card-w: calc(50% - var(--print-timetable-gap) / 2);
+  }
+
+  .print-sheet--per-2 {
+    --print-margin-total: 10mm;
+    --print-timetable-gap: 30px;
+    --printable-h: calc(var(--print-page-h) - var(--print-margin-total));
+    --print-card-h: calc((var(--printable-h) - var(--print-timetable-gap)) / 2);
+  }
+
+  .print-sheet--per-1 {
+    --print-margin-total: 16mm;
+    --printable-h: calc(var(--print-page-h) - var(--print-margin-total));
+  }
+
   .print-card {
     box-sizing: border-box;
     page-break-inside: avoid;
     break-inside: avoid;
   }
 
-  /* 1 per page */
+  /* 1 per page — fill full printable height */
   .print-sheet--per-1 .print-card {
-    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: var(--printable-h);
+    height: var(--printable-h);
     page-break-after: always;
   }
+
   .print-sheet--per-1 .print-card:last-child {
     page-break-after: auto;
   }
 
+  .print-sheet--per-1 .print-grid {
+    flex: 1 1 auto;
+    height: 100%;
+  }
+
+  .print-sheet--per-1 .print-grid tbody {
+    height: 100%;
+  }
+
+  .print-sheet--per-1 .print-grid tbody tr {
+    height: 1%;
+  }
+
   /* 2 per page: stack vertically, force page break after every 2nd item */
   .print-sheet--per-2 .print-card {
-    height: 48%;
-    margin-bottom: 4%;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: var(--print-card-h);
+    margin-bottom: var(--print-timetable-gap);
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .print-sheet--per-2 .print-grid {
+    flex: 1 1 auto;
+    height: 100%;
+  }
+
+  .print-sheet--per-2 .print-grid tbody {
+    height: 100%;
+  }
+
+  .print-sheet--per-2 .print-grid tbody tr {
+    height: 1%;
   }
   .print-sheet--per-2 .print-card:nth-child(2n) {
     page-break-after: always;
@@ -2152,26 +2369,61 @@ td.warn {
     page-break-after: auto;
   }
 
-  /* 4 per page: 2x2 grid; break every 4th */
+  /* 4 per page: fixed mm heights so 2×2 fits inside printable area */
   .print-sheet--per-4 {
     display: block;
+    font-size: 0;
+    line-height: 0;
   }
+
   .print-sheet--per-4 .print-card {
-    display: inline-block;
+    display: inline-flex;
+    flex-direction: column;
     vertical-align: top;
-    width: 48%;
-    height: 48%;
     box-sizing: border-box;
-    margin-right: 2%;
-    margin-bottom: 2%;
+    overflow: hidden;
+    font-size: initial;
+    line-height: normal;
+    width: var(--print-card-w);
+    height: var(--print-card-h);
+    margin: 0;
+    padding: 0;
   }
-  .print-sheet--per-4 .print-card:nth-child(2n) {
-    margin-right: 0;
+
+  /* 30px between columns (left column cards) */
+  .print-sheet--per-4 .print-card:nth-child(odd) {
+    margin-right: var(--print-timetable-gap);
   }
+
+  /* 30px between rows (top row cards) */
+  .print-sheet--per-4 .print-card:nth-child(4n + 1),
+  .print-sheet--per-4 .print-card:nth-child(4n + 2) {
+    margin-bottom: var(--print-timetable-gap);
+  }
+
+  .print-sheet--per-4 .print-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .print-sheet--per-4 .print-grid tbody {
+    height: 100%;
+  }
+
+  .print-sheet--per-4 .print-grid tbody tr {
+    height: 1%;
+  }
+
   .print-sheet--per-4 .print-card:nth-child(4n) {
     page-break-after: always;
+  }
+
+  .print-sheet--per-4 .print-card:nth-child(4n + 3),
+  .print-sheet--per-4 .print-card:nth-child(4n + 4) {
     margin-bottom: 0;
   }
+
   .print-sheet--per-4 .print-card:last-child {
     page-break-after: auto;
   }
@@ -2183,6 +2435,12 @@ td.warn {
     padding-bottom: 3mm;
   }
 
+  .print-sheet--per-4 .print-card__header {
+    margin: 0 0 1.2mm;
+    padding-bottom: 1mm;
+    border-bottom-width: 0.5px;
+  }
+
   .print-card__institution {
     margin: 0;
     font-family: var(--font-display);
@@ -2192,9 +2450,13 @@ td.warn {
     color: #000;
   }
 
-  .print-sheet--per-2 .print-card__institution,
-  .print-sheet--per-4 .print-card__institution {
+  .print-sheet--per-2 .print-card__institution {
     font-size: 13pt;
+  }
+
+  .print-sheet--per-4 .print-card__institution {
+    font-size: 8pt;
+    line-height: 1.1;
   }
 
   .print-card__subject {
@@ -2204,9 +2466,18 @@ td.warn {
     color: #111;
   }
 
-  .print-sheet--per-2 .print-card__subject,
-  .print-sheet--per-4 .print-card__subject {
+  .print-sheet--per-2 .print-card__subject {
     font-size: 10pt;
+  }
+
+  .print-sheet--per-4 .print-card__subject {
+    margin: 0.5mm 0 0;
+    font-size: 7pt;
+    line-height: 1.15;
+  }
+
+  .print-sheet--per-4 .print-card__subject-meta {
+    font-size: 6pt;
   }
 
   .print-card__subject-prefix {
@@ -2229,8 +2500,10 @@ td.warn {
   .print-sheet--per-2 .print-grid {
     font-size: 8pt;
   }
+
   .print-sheet--per-4 .print-grid {
-    font-size: 7pt;
+    font-size: 5pt;
+    line-height: 1.08;
   }
 
   .print-grid th,
@@ -2242,13 +2515,108 @@ td.warn {
     word-wrap: break-word;
   }
 
+  .print-sheet--per-4 .print-grid th,
+  .print-sheet--per-4 .print-grid td {
+    padding: 0.35mm 0.25mm;
+    border-width: 0.5px;
+  }
+
+  .print-sheet--per-4 .print-grid__day-head {
+    width: 7mm;
+    max-width: 7mm;
+    font-size: 5pt;
+  }
+
+  .print-sheet--per-4 .print-grid__day-label {
+    font-size: 5pt;
+    padding: 0.3mm 0.2mm;
+  }
+
   .print-grid__day-head,
   .print-grid__period-head {
     background: #eee !important;
     font-weight: 700;
     color: #000;
+    line-height: 1.2;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  .print-grid__period-head--break {
+    background: #e0e0e0 !important;
+  }
+
+  .print-grid__period-name {
+    display: block;
+    font-weight: 700;
+  }
+
+  .print-grid__period-time {
+    display: block;
+    font-size: 5.5pt;
+    font-weight: 400;
+    color: #444;
+    margin-top: 0.5mm;
+    line-height: 1.15;
+  }
+
+  .print-sheet--per-4 .print-grid__period-name {
+    font-size: 5pt;
+  }
+
+  .print-sheet--per-4 .print-grid__period-time {
+    font-size: 3.5pt;
+    margin-top: 0.2mm;
+    line-height: 1.05;
+  }
+
+  .print-grid__break-cell {
+    background: #ececec !important;
+    padding: 1mm 0.5mm !important;
+    width: 2.2em;
+    max-width: 2.2em;
+    vertical-align: middle;
+    text-align: center;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-grid__break-label {
+    display: inline-block;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-weight: 700;
+    font-size: 8pt;
+    line-height: 1.1;
+    white-space: nowrap;
+    max-height: 100%;
+  }
+
+  .print-sheet--per-4 .print-grid__break-cell {
+    width: 1.4em;
+    max-width: 1.4em;
+    padding: 0.3mm 0.15mm !important;
+  }
+
+  .print-sheet--per-4 .print-grid__break-label {
+    font-size: 5pt;
+  }
+
+  .print-grid__break-time {
+    display: block;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 5pt;
+    color: #555;
+    margin-top: 2mm;
+    white-space: nowrap;
+  }
+
+  .print-sheet--per-4 .print-grid__break-time {
+    font-size: 3.5pt;
+    margin-top: 0.8mm;
   }
 
   .print-grid__day-label {
@@ -2272,5 +2640,16 @@ td.warn {
     color: #333;
     font-size: 0.85em;
     margin-top: 0.5mm;
+  }
+
+  .print-sheet--per-4 .print-grid__subject {
+    font-size: 5pt;
+    line-height: 1.08;
+  }
+
+  .print-sheet--per-4 .print-grid__teachers {
+    font-size: 4pt;
+    margin-top: 0.2mm;
+    line-height: 1.05;
   }
 }

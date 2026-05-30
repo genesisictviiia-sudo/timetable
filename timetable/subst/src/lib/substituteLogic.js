@@ -1,4 +1,4 @@
-const MAX_WEEKLY_TOTAL = 25;
+const MAX_WEEKLY_TOTAL = 31;
 
 function norm(s) {
   return String(s ?? "")

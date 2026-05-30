@@ -2,6 +2,7 @@ import { getSnapshotTeachers } from "./timetableSnapshot";
 import {
   getClassLessons,
   loadClassLessonsMap,
+  loadSchoolScheduleDimensions,
   loadTeachersFull,
   normalizeTimeOffGrid,
 } from "./settingsStorage";
@@ -94,7 +95,9 @@ export function buildColumns(dayLabels, periodLabels, daysPerWeek, periodsPerDay
 }
 
 function getTeacherTimeOffGrid(teacher, daysPerWeek, periodsPerDay) {
-  return normalizeTimeOffGrid(teacher.timeOffGrid, daysPerWeek, periodsPerDay, periodsPerDay);
+  const schedule = loadSchoolScheduleDimensions();
+  const totalPeriodSlots = schedule?.totalPeriodSlots ?? periodsPerDay;
+  return normalizeTimeOffGrid(teacher.timeOffGrid, daysPerWeek, periodsPerDay, totalPeriodSlots);
 }
 
 export function buildTeacherOccupancy(timetable, ignoreCardId = null) {

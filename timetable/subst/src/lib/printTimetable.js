@@ -1,4 +1,5 @@
 import { getCellCard } from "./timetableValidation";
+import { loadSubjects } from "./settingsStorage";
 import { getTeacherLessonAt, listTeachersForView } from "./teacherTimetableView";
 
 const SCHOOL_STORAGE_KEY = "school";
@@ -15,15 +16,73 @@ export function loadInstitutionName() {
   }
 }
 
-function buildPeriodColumns(timetable) {
+function formatPeriodTime(startTime, endTime) {
+  const start = String(startTime || "").trim();
+  const end = String(endTime || "").trim();
+  if (start && end) return `${start}–${end}`;
+  return start || end || "";
+}
+
+function buildSubjectShortMap() {
+  const map = new Map();
+  for (const s of loadSubjects()) {
+    map.set(s.name, s.shortName);
+  }
+  return map;
+}
+
+function toShortSubject(subject, shortMap) {
+  if (!subject) return "";
+  return shortMap.get(subject) || subject;
+}
+
+/**
+ * Period columns from School settings → Setting of periods (lessons + breaks).
+ * Falls back to lesson-only columns from the timetable when school periods are missing.
+ */
+export function loadSchoolPeriodColumns(timetable) {
+  try {
+    const raw = localStorage.getItem(SCHOOL_STORAGE_KEY);
+    if (!raw) return buildPeriodColumnsFromTimetable(timetable);
+    const school = JSON.parse(raw);
+    const rows = Array.isArray(school?.periods) ? school.periods : [];
+    if (!rows.length) return buildPeriodColumnsFromTimetable(timetable);
+
+    let lessonIndex = 0;
+    return rows.map((p, slotIndex) => {
+      const isBreak = p.type === "break";
+      const label =
+        String(p.name || "").trim() || (isBreak ? "Break" : `P${lessonIndex + 1}`);
+      const col = {
+        slotIndex,
+        isBreak,
+        label,
+        timeLabel: formatPeriodTime(p.startTime, p.endTime),
+        lessonPeriod: null,
+      };
+      if (!isBreak) {
+        col.lessonPeriod = lessonIndex;
+        lessonIndex += 1;
+      }
+      return col;
+    });
+  } catch {
+    return buildPeriodColumnsFromTimetable(timetable);
+  }
+}
+
+function buildPeriodColumnsFromTimetable(timetable) {
   const columns = timetable.columns || [];
   const periodsPerDay = timetable.periodsPerDay || 1;
   const out = [];
   for (let p = 0; p < periodsPerDay; p++) {
     const col = columns.find((c) => c.period === p) || columns[p];
     out.push({
-      period: p,
+      slotIndex: p,
+      isBreak: false,
       label: col?.periodLabel || timetable.periodLabels?.[p] || `P${p + 1}`,
+      timeLabel: "",
+      lessonPeriod: p,
     });
   }
   return out;
@@ -42,21 +101,36 @@ function buildDayRows(timetable) {
   return out;
 }
 
+function getLessonCell(timetable, kind, itemContext, day, lessonPeriod, shortMap) {
+  if (lessonPeriod == null) return null;
+
+  if (kind === "class") {
+    const card = getCellCard(timetable, itemContext.classId, day, lessonPeriod);
+    if (!card) return null;
+    return {
+      subject: toShortSubject(card.subject, shortMap),
+      teachers: Array.isArray(card.teachers) ? card.teachers : [],
+    };
+  }
+
+  const lesson = getTeacherLessonAt(timetable, itemContext.teacherName, day, lessonPeriod);
+  if (!lesson) return null;
+  return {
+    subject: toShortSubject(lesson.subject, shortMap),
+    classLabel: lesson.classLabel,
+  };
+}
+
 /**
  * Build a print payload: list of items, each with a title (class/teacher name)
- * and a 2-D grid of cell contents.
- *
- * @param {object} timetable Generated timetable from storage
- * @param {"class"|"teacher"} kind
- * @param {"all"|"current"} scope
- * @param {object} current  { classId?, teacherName? }
- * @returns {{ periods: Array, days: Array, items: Array<{ title: string, subtitle?: string, cells: Array<Array<{ subject?: string, teachers?: string[], classLabel?: string } | null>> }> }}
+ * and a 2-D grid of cell contents aligned to school period columns.
  */
 export function buildPrintData(timetable, kind, scope, current = {}) {
   if (!timetable) return { periods: [], days: [], items: [] };
-  const periods = buildPeriodColumns(timetable);
-  const days = buildDayRows(timetable);
 
+  const periods = loadSchoolPeriodColumns(timetable);
+  const days = buildDayRows(timetable);
+  const shortMap = buildSubjectShortMap();
   const items = [];
 
   if (kind === "class") {
@@ -67,13 +141,16 @@ export function buildPrintData(timetable, kind, scope, current = {}) {
         : classes;
     for (const cls of targets) {
       const cells = days.map(({ day }) =>
-        periods.map(({ period }) => {
-          const card = getCellCard(timetable, cls.id, day, period);
-          if (!card) return null;
-          return {
-            subject: card.subject,
-            teachers: Array.isArray(card.teachers) ? card.teachers : [],
-          };
+        periods.map((col) => {
+          if (col.isBreak) return null;
+          return getLessonCell(
+            timetable,
+            "class",
+            { classId: cls.id },
+            day,
+            col.lessonPeriod,
+            shortMap
+          );
         })
       );
       items.push({
@@ -90,13 +167,16 @@ export function buildPrintData(timetable, kind, scope, current = {}) {
         : teachers;
     for (const teacher of targets) {
       const cells = days.map(({ day }) =>
-        periods.map(({ period }) => {
-          const lesson = getTeacherLessonAt(timetable, teacher, day, period);
-          if (!lesson) return null;
-          return {
-            subject: lesson.subject,
-            classLabel: lesson.classLabel,
-          };
+        periods.map((col) => {
+          if (col.isBreak) return null;
+          return getLessonCell(
+            timetable,
+            "teacher",
+            { teacherName: teacher },
+            day,
+            col.lessonPeriod,
+            shortMap
+          );
         })
       );
       items.push({ title: teacher, subtitle: "", cells });

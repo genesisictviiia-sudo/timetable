@@ -165,7 +165,7 @@ export default function TimetablePage() {
   };
 
   const handlePrintRequest = useCallback(
-    ({ institution, perPage, kind, scope }) => {
+    ({ institution, perPage, kind, scope, orientation }) => {
       if (!timetable) return;
       const data = buildPrintData(timetable, kind, scope, {
         classId: currentClass?.id,
@@ -180,7 +180,13 @@ export default function TimetablePage() {
         setPrintOpen(false);
         return;
       }
-      setPrintJob({ institution, perPage, kind, data });
+      setPrintJob({
+        institution,
+        perPage,
+        kind,
+        orientation: orientation || "landscape",
+        data,
+      });
       setPrintOpen(false);
     },
     [timetable, currentClass, currentTeacher]
@@ -461,6 +467,7 @@ export default function TimetablePage() {
           institution={printJob.institution}
           kind={printJob.kind}
           perPage={printJob.perPage}
+          orientation={printJob.orientation}
           data={printJob.data}
         />
       )}

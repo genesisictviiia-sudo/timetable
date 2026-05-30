@@ -14,6 +14,7 @@ export default function PrintTimetableModal({
   const [perPage, setPerPage] = useState(1);
   const [kind, setKind] = useState(defaultKind);
   const [scope, setScope] = useState("all");
+  const [orientation, setOrientation] = useState("landscape");
 
   const currentDisabled =
     (kind === "class" && !hasCurrentClass) || (kind === "teacher" && !hasCurrentTeacher);
@@ -35,6 +36,7 @@ export default function PrintTimetableModal({
       perPage: Number(perPage) || 1,
       kind,
       scope,
+      orientation,
     });
   };
 
@@ -43,7 +45,9 @@ export default function PrintTimetableModal({
       <div className="modal-card modal-card--wide">
         <h3 className="modal-title">Print / Save as PDF</h3>
         <p className="card-desc">
-          Configure the printout. Choose <strong>Save as PDF</strong> in the print dialog to download.
+          Configure the printout. Period layout and breaks come from{" "}
+          <strong>School settings → Setting of periods</strong>. Choose{" "}
+          <strong>Save as PDF</strong> in the print dialog to download.
         </p>
 
         <form onSubmit={submit} className="print-form">
@@ -58,6 +62,32 @@ export default function PrintTimetableModal({
               autoFocus
             />
           </label>
+
+          <fieldset className="print-field print-field--radio">
+            <legend className="field-label">Orientation</legend>
+            <div className="print-radio-group">
+              <label className="print-radio">
+                <input
+                  type="radio"
+                  name="print-orientation"
+                  value="landscape"
+                  checked={orientation === "landscape"}
+                  onChange={() => setOrientation("landscape")}
+                />
+                Landscape
+              </label>
+              <label className="print-radio">
+                <input
+                  type="radio"
+                  name="print-orientation"
+                  value="portrait"
+                  checked={orientation === "portrait"}
+                  onChange={() => setOrientation("portrait")}
+                />
+                Portrait
+              </label>
+            </div>
+          </fieldset>
 
           <label className="print-field">
             <span className="field-label">Timetables per A4 sheet</span>
@@ -103,7 +133,7 @@ export default function PrintTimetableModal({
             </select>
           </label>
 
-          <div className="modal-actions">
+          <div className="modal-actions print-form__actions">
             <button type="button" className="btn btn-ghost" onClick={onCancel}>
               Cancel
             </button>
