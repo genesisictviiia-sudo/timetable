@@ -2070,3 +2070,207 @@ td.warn {
   color: var(--text);
   word-break: break-word;
 }
+
+/* Print setup modal */
+.print-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  margin-top: 8px;
+}
+
+.print-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.print-field:first-of-type {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 520px) {
+  .print-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Print-only sheet: hidden on screen, visible only during print */
+.print-sheet {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+
+  body {
+    background: #fff !important;
+    background-image: none !important;
+  }
+
+  /* Hide the entire app UI while printing */
+  #root,
+  .app {
+    display: none !important;
+  }
+
+  /* Reveal the print sheet (rendered via portal as a sibling of .app) */
+  .print-sheet {
+    display: block;
+    color: #000;
+    font-family: var(--font-body);
+  }
+
+  .print-card {
+    box-sizing: border-box;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* 1 per page */
+  .print-sheet--per-1 .print-card {
+    height: 100%;
+    page-break-after: always;
+  }
+  .print-sheet--per-1 .print-card:last-child {
+    page-break-after: auto;
+  }
+
+  /* 2 per page: stack vertically, force page break after every 2nd item */
+  .print-sheet--per-2 .print-card {
+    height: 48%;
+    margin-bottom: 4%;
+  }
+  .print-sheet--per-2 .print-card:nth-child(2n) {
+    page-break-after: always;
+    margin-bottom: 0;
+  }
+  .print-sheet--per-2 .print-card:last-child {
+    page-break-after: auto;
+  }
+
+  /* 4 per page: 2x2 grid; break every 4th */
+  .print-sheet--per-4 {
+    display: block;
+  }
+  .print-sheet--per-4 .print-card {
+    display: inline-block;
+    vertical-align: top;
+    width: 48%;
+    height: 48%;
+    box-sizing: border-box;
+    margin-right: 2%;
+    margin-bottom: 2%;
+  }
+  .print-sheet--per-4 .print-card:nth-child(2n) {
+    margin-right: 0;
+  }
+  .print-sheet--per-4 .print-card:nth-child(4n) {
+    page-break-after: always;
+    margin-bottom: 0;
+  }
+  .print-sheet--per-4 .print-card:last-child {
+    page-break-after: auto;
+  }
+
+  .print-card__header {
+    text-align: center;
+    margin: 0 0 6mm;
+    border-bottom: 1px solid #333;
+    padding-bottom: 3mm;
+  }
+
+  .print-card__institution {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 18pt;
+    font-weight: 700;
+    line-height: 1.15;
+    color: #000;
+  }
+
+  .print-sheet--per-2 .print-card__institution,
+  .print-sheet--per-4 .print-card__institution {
+    font-size: 13pt;
+  }
+
+  .print-card__subject {
+    margin: 2mm 0 0;
+    font-size: 12pt;
+    font-weight: 600;
+    color: #111;
+  }
+
+  .print-sheet--per-2 .print-card__subject,
+  .print-sheet--per-4 .print-card__subject {
+    font-size: 10pt;
+  }
+
+  .print-card__subject-prefix {
+    font-weight: 500;
+    color: #444;
+  }
+
+  .print-card__subject-meta {
+    font-weight: 400;
+    color: #555;
+  }
+
+  .print-grid {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 9pt;
+  }
+
+  .print-sheet--per-2 .print-grid {
+    font-size: 8pt;
+  }
+  .print-sheet--per-4 .print-grid {
+    font-size: 7pt;
+  }
+
+  .print-grid th,
+  .print-grid td {
+    border: 1px solid #333;
+    padding: 1.5mm 1mm;
+    text-align: center;
+    vertical-align: middle;
+    word-wrap: break-word;
+  }
+
+  .print-grid__day-head,
+  .print-grid__period-head {
+    background: #eee !important;
+    font-weight: 700;
+    color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-grid__day-label {
+    background: #f5f5f5 !important;
+    font-weight: 700;
+    color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-grid__cell--empty {
+    color: #888;
+  }
+
+  .print-grid__subject {
+    font-weight: 700;
+    color: #000;
+  }
+
+  .print-grid__teachers {
+    color: #333;
+    font-size: 0.85em;
+    margin-top: 0.5mm;
+  }
+}

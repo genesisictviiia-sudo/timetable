@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomTray from "../components/BottomTray";
+import PrintTimetableModal from "../components/PrintTimetableModal";
+import PrintableTimetable from "../components/PrintableTimetable";
 import TimetableGenerateSummary from "../components/TimetableGenerateSummary";
 import TeacherTimetableGrid from "../components/TeacherTimetableGrid";
 import TimetableGrid from "../components/TimetableGrid";
 import { useGenerateTimetable } from "../hooks/useGenerateTimetable";
+import { buildPrintData } from "../lib/printTimetable";
 import { countTeacherLessons, listTeachersForView } from "../lib/teacherTimetableView";
 import { removeCardToTray, toggleCardFixed } from "../lib/timetableValidation";
 import { loadGeneratedTimetable, saveGeneratedTimetable } from "../lib/timetableStorage";
@@ -25,6 +28,8 @@ export default function TimetablePage() {
   const [warning, setWarning] = useState("");
   const [trayDragOver, setTrayDragOver] = useState(false);
   const [draggingCardId, setDraggingCardId] = useState(null);
+  const [printOpen, setPrintOpen] = useState(false);
+  const [printJob, setPrintJob] = useState(null);
 
   const loadTimetable = useCallback(() => {
     const loaded = loadGeneratedTimetable();
@@ -159,6 +164,41 @@ export default function TimetablePage() {
     setDraggingCardId(null);
   };
 
+  const handlePrintRequest = useCallback(
+    ({ institution, perPage, kind, scope }) => {
+      if (!timetable) return;
+      const data = buildPrintData(timetable, kind, scope, {
+        classId: currentClass?.id,
+        teacherName: currentTeacher,
+      });
+      if (!data.items.length) {
+        setWarning(
+          kind === "class"
+            ? "No classes available to print."
+            : "No teachers available to print."
+        );
+        setPrintOpen(false);
+        return;
+      }
+      setPrintJob({ institution, perPage, kind, data });
+      setPrintOpen(false);
+    },
+    [timetable, currentClass, currentTeacher]
+  );
+
+  useEffect(() => {
+    if (!printJob) return undefined;
+    const handle = window.setTimeout(() => {
+      window.print();
+    }, 60);
+    const cleanup = () => setPrintJob(null);
+    window.addEventListener("afterprint", cleanup, { once: true });
+    return () => {
+      window.clearTimeout(handle);
+      window.removeEventListener("afterprint", cleanup);
+    };
+  }, [printJob]);
+
   const classTitle = currentClass?.title || currentClass?.label;
   const hasTimetable = Boolean(timetable?.classes?.length);
   const isFrozen = Boolean(timetable?.frozen);
@@ -210,6 +250,14 @@ export default function TimetablePage() {
                   <span className="tt-tray-total__value">{totalTrayCount}</span>
                 </div>
               )}
+              <button
+                type="button"
+                className="btn btn-outline btn--sm"
+                onClick={() => setPrintOpen(true)}
+                title="Print or save as PDF"
+              >
+                Print
+              </button>
             </>
           )}
         </div>
@@ -397,6 +445,25 @@ export default function TimetablePage() {
           placedOnGrid={placedOnGrid}
         />
       </section>
+
+      {printOpen && (
+        <PrintTimetableModal
+          defaultKind={isClassView ? "class" : "teacher"}
+          hasCurrentClass={Boolean(currentClass)}
+          hasCurrentTeacher={Boolean(currentTeacher)}
+          onCancel={() => setPrintOpen(false)}
+          onPrint={handlePrintRequest}
+        />
+      )}
+
+      {printJob && (
+        <PrintableTimetable
+          institution={printJob.institution}
+          kind={printJob.kind}
+          perPage={printJob.perPage}
+          data={printJob.data}
+        />
+      )}
     </div>
   );
 }
