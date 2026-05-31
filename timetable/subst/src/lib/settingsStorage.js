@@ -1,3 +1,9 @@
+import {
+  readUserJson,
+  writeUserJson,
+  removeUserItem,
+} from "./userDataStorage";
+
 export const TEACHERS_STORAGE_KEY = "teachers";
 export const SUBJECTS_STORAGE_KEY = "subjects";
 export const CLASS_LESSONS_STORAGE_KEY = "classLessons";
@@ -6,13 +12,11 @@ export const SCHOOL_STORAGE_KEY = "school";
 export { SUBSTITUTIONS_STORAGE_KEY } from "./assignmentsStorage";
 
 function readJson(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
+  return readUserJson(key, fallback);
+}
+
+function writeJson(key, value) {
+  writeUserJson(key, value);
 }
 
 export function loadTeachersFull() {
@@ -155,7 +159,7 @@ function normalizeTeacher(t) {
 
 export function saveTeachersFull(teachers) {
   const payload = teachers.map(({ constraints: _c, ...rest }) => rest);
-  localStorage.setItem(TEACHERS_STORAGE_KEY, JSON.stringify(payload));
+  writeJson(TEACHERS_STORAGE_KEY, payload);
 }
 
 export function formatTimeOffSummary(timeOffGrid) {
@@ -281,8 +285,36 @@ export function syncTeacherLessonsFromClassLessons() {
 export function saveClassLessonsForClass(classId, lessons) {
   const map = loadClassLessonsMap();
   map[classId] = lessons;
-  localStorage.setItem(CLASS_LESSONS_STORAGE_KEY, JSON.stringify(map));
+  writeJson(CLASS_LESSONS_STORAGE_KEY, map);
   syncTeacherLessonsFromClassLessons();
+}
+
+export function saveSubjectsList(subjects) {
+  writeJson(SUBJECTS_STORAGE_KEY, subjects);
+}
+
+export function clearSubjectsList() {
+  removeUserItem(SUBJECTS_STORAGE_KEY);
+}
+
+export function loadClassesStorageRaw() {
+  return readJson(CLASSES_STORAGE_KEY, null);
+}
+
+export function saveClassesStorageRaw(payload) {
+  writeJson(CLASSES_STORAGE_KEY, payload);
+}
+
+export function loadSchoolStorageRaw() {
+  return readJson(SCHOOL_STORAGE_KEY, null);
+}
+
+export function saveSchoolStorageRaw(payload) {
+  writeJson(SCHOOL_STORAGE_KEY, payload);
+}
+
+export function clearSchoolStorage() {
+  removeUserItem(SCHOOL_STORAGE_KEY);
 }
 
 export function getClassLessons(classId) {

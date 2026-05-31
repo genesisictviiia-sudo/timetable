@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import RowMoveButtons from "../../components/RowMoveButtons";
 import { moveRowAtIndex } from "../../lib/reorderRows";
-import { defaultSchoolConstraints, normalizeSchoolConstraints } from "../../lib/settingsStorage";
+import { defaultSchoolConstraints, normalizeSchoolConstraints, loadSchoolStorageRaw, saveSchoolStorageRaw, clearSchoolStorage, SCHOOL_STORAGE_KEY } from "../../lib/settingsStorage";
 import "../../App.css";
 
-export const SCHOOL_STORAGE_KEY = "school";
+export { SCHOOL_STORAGE_KEY };
 
 const PERIOD_TYPES = ["lesson", "break"];
 
@@ -50,9 +50,8 @@ export default function SchoolSettingsPage() {
   const [school, setSchool] = useState(defaultSchool);
 
   useEffect(() => {
-    const saved = localStorage.getItem(SCHOOL_STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
+    const parsed = loadSchoolStorageRaw();
+    if (parsed) {
       setSchool({
         ...defaultSchool,
         ...parsed,
@@ -151,7 +150,7 @@ export default function SchoolSettingsPage() {
 
   const resetForm = () => {
     setSchool(defaultSchool);
-    localStorage.removeItem(SCHOOL_STORAGE_KEY);
+    clearSchoolStorage();
   };
 
   const saveForm = () => {
@@ -246,7 +245,7 @@ export default function SchoolSettingsPage() {
       })),
     };
 
-    localStorage.setItem(SCHOOL_STORAGE_KEY, JSON.stringify(cleanSchool));
+    saveSchoolStorageRaw(cleanSchool);
     setSchool(cleanSchool);
 
     alert("Latest school settings saved successfully.");

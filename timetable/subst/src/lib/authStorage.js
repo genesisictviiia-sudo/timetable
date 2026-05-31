@@ -1,4 +1,5 @@
 import { sendPasswordResetEmail } from "./sendResetEmail";
+import { onUserSessionStarted } from "./userDataStorage";
 
 const USERS_KEY = "subst.auth.users";
 const SESSION_KEY = "subst.auth.session";
@@ -81,6 +82,7 @@ export async function signup({ email, password, name }) {
   };
   writeJson(USERS_KEY, users);
   writeJson(SESSION_KEY, { email: normalized, startedAt: Date.now() });
+  onUserSessionStarted(normalized, { isNewAccount: true });
   return { email: normalized, profile: users[normalized].profile };
 }
 
@@ -92,6 +94,7 @@ export async function login({ email, password }) {
   const hash = await hashPassword(password, record.salt);
   if (hash !== record.hash) throw new Error("Incorrect password.");
   writeJson(SESSION_KEY, { email: normalized, startedAt: Date.now() });
+  onUserSessionStarted(normalized, { isNewAccount: false });
   return { email: normalized, profile: record.profile };
 }
 
@@ -108,6 +111,21 @@ export function updateProfile(patch) {
   record.profile = { ...record.profile, ...patch };
   writeJson(USERS_KEY, users);
   return { email: session.email, profile: record.profile };
+}
+
+export async function setPasswordForCurrentUser({ newPassword }) {
+  const session = getSession();
+  if (!session?.email) throw new Error("Not signed in.");
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error("New password must be at least 6 characters.");
+  }
+  const users = getAllUsers();
+  const record = users[session.email];
+  if (!record) throw new Error("Account no longer exists.");
+  const salt = randomSalt();
+  record.salt = salt;
+  record.hash = await hashPassword(newPassword, salt);
+  writeJson(USERS_KEY, users);
 }
 
 export async function changePassword({ currentPassword, newPassword }) {
@@ -149,9 +167,14 @@ export async function requestPasswordReset(email) {
   resets[normalized] = { code, expiresAt: Date.now() + RESET_TTL_MS };
   writeJson(RESET_KEY, resets);
 
-  await sendPasswordResetEmail(normalized, code);
+  const mailResult = await sendPasswordResetEmail(normalized, code);
 
-  return { email: normalized };
+  return {
+    email: normalized,
+    code,
+    emailDelivered: mailResult.delivered,
+    emailError: mailResult.detail || null,
+  };
 }
 
 export async function resetPasswordWithCode({ email, code, newPassword }) {

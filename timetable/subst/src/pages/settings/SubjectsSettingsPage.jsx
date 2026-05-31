@@ -9,7 +9,7 @@ import {
   validateCsvFormat,
 } from "../../lib/csvSample";
 import { moveRowById } from "../../lib/reorderRows";
-import { loadSubjects, SUBJECTS_STORAGE_KEY } from "../../lib/settingsStorage";
+import { clearSubjectsList, loadSubjects, saveSubjectsList } from "../../lib/settingsStorage";
 import "../../App.css";
 
 function newSubject() {
@@ -97,7 +97,7 @@ export default function SubjectsSettingsPage() {
       name: r.name.trim(),
       shortName: (r.shortName || r.name).trim(),
     }));
-    localStorage.setItem(SUBJECTS_STORAGE_KEY, JSON.stringify(payload));
+    saveSubjectsList(payload);
     alert("Subjects database saved.");
   };
 
@@ -130,7 +130,7 @@ export default function SubjectsSettingsPage() {
 
   const resetAll = () => {
     if (!window.confirm("Delete all subject entries?")) return;
-    localStorage.removeItem(SUBJECTS_STORAGE_KEY);
+    clearSubjectsList();
     setRows([newSubject()]);
   };
 

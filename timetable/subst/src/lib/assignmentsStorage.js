@@ -1,4 +1,5 @@
 import { mondayOfCalendarWeek, toISODate } from "./dates";
+import { readUserJson, writeUserJson, readUserRaw, writeUserRaw } from "./userDataStorage";
 
 /** Permanent browser database key (localStorage), same as other General Settings data. */
 export const SUBSTITUTIONS_STORAGE_KEY = "substitution-assignments-v2";
@@ -6,17 +7,11 @@ const LEGACY_STORAGE_KEY = "substitution-assignments-v1";
 const LAST_DATE_KEY = "substitution-last-date-v1";
 
 function readJson(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
+  return readUserJson(key, fallback);
 }
 
 function writeJson(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  writeUserJson(key, value);
 }
 
 function migrateLegacyAssignments() {
@@ -71,11 +66,11 @@ function serializeRow(r) {
 
 export function saveLastSubstitutionDate(dateISO) {
   if (!dateISO) return;
-  localStorage.setItem(LAST_DATE_KEY, dateISO);
+  writeUserRaw(LAST_DATE_KEY, dateISO);
 }
 
 export function loadLastSubstitutionDate() {
-  return localStorage.getItem(LAST_DATE_KEY) || "";
+  return readUserRaw(LAST_DATE_KEY) || "";
 }
 
 export function listSavedSubstitutionDates() {

@@ -1,12 +1,7 @@
 import { useState } from "react";
 import UserAvatar from "./UserAvatar";
-import {
-  changePassword,
-  requestPasswordReset,
-  resetPasswordWithCode,
-  updateProfile,
-} from "../lib/authStorage";
-import { PASSWORD_RESET_FROM_EMAIL } from "../lib/resetEmailConfig";
+import ForgotPasswordForm from "./ForgotPasswordForm";
+import { setPasswordForCurrentUser, updateProfile } from "../lib/authStorage";
 
 export default function ProfileSettingsModal({ open, user, onClose, onUserChange, onLogout }) {
   const [name, setName] = useState(user.profile.name || "");
@@ -15,7 +10,6 @@ export default function ProfileSettingsModal({ open, user, onClose, onUserChange
   const [profileMsg, setProfileMsg] = useState("");
   const [profileErr, setProfileErr] = useState("");
 
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwMsg, setPwMsg] = useState("");
@@ -23,14 +17,6 @@ export default function ProfileSettingsModal({ open, user, onClose, onUserChange
   const [pwBusy, setPwBusy] = useState(false);
 
   const [forgotOpen, setForgotOpen] = useState(false);
-  const [resetEmail, setResetEmail] = useState(user.email || "");
-  const [resetCode, setResetCode] = useState("");
-  const [resetNewPassword, setResetNewPassword] = useState("");
-  const [resetConfirmPassword, setResetConfirmPassword] = useState("");
-  const [resetMsg, setResetMsg] = useState("");
-  const [resetErr, setResetErr] = useState("");
-  const [resetBusy, setResetBusy] = useState(false);
-  const [codeSent, setCodeSent] = useState(false);
 
   if (!open) return null;
 
@@ -61,78 +47,20 @@ export default function ProfileSettingsModal({ open, user, onClose, onUserChange
     setPwMsg("");
     setPwErr("");
     if (newPassword !== confirmPassword) {
-      setPwErr("New passwords do not match.");
+      setPwErr("Passwords do not match.");
       return;
     }
     setPwBusy(true);
     try {
-      await changePassword({ currentPassword, newPassword });
+      await setPasswordForCurrentUser({ newPassword });
       setPwMsg("Password updated.");
-      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err) {
-      setPwErr(err.message || "Could not change password.");
+      setPwErr(err.message || "Could not update password.");
     } finally {
       setPwBusy(false);
     }
-  };
-
-  const sendResetCode = async (e) => {
-    e.preventDefault();
-    setResetMsg("");
-    setResetErr("");
-    setResetBusy(true);
-    try {
-      const { email } = await requestPasswordReset(resetEmail);
-      setCodeSent(true);
-      setResetMsg(
-        `A 6-digit reset code was sent from ${PASSWORD_RESET_FROM_EMAIL} to ${email}. Check your inbox and enter the code below.`
-      );
-    } catch (err) {
-      setResetErr(err.message || "Could not send reset code.");
-    } finally {
-      setResetBusy(false);
-    }
-  };
-
-  const submitResetPassword = async (e) => {
-    e.preventDefault();
-    setResetMsg("");
-    setResetErr("");
-    if (resetNewPassword !== resetConfirmPassword) {
-      setResetErr("New passwords do not match.");
-      return;
-    }
-    setResetBusy(true);
-    try {
-      await resetPasswordWithCode({
-        email: resetEmail,
-        code: resetCode,
-        newPassword: resetNewPassword,
-      });
-      setResetMsg("Password reset successfully. You can sign in with your new password.");
-      setResetCode("");
-      setResetNewPassword("");
-      setResetConfirmPassword("");
-      setCodeSent(false);
-      setForgotOpen(false);
-    } catch (err) {
-      setResetErr(err.message || "Could not reset password.");
-    } finally {
-      setResetBusy(false);
-    }
-  };
-
-  const openForgot = () => {
-    setForgotOpen(true);
-    setResetEmail(user.email || "");
-    setResetCode("");
-    setResetNewPassword("");
-    setResetConfirmPassword("");
-    setResetMsg("");
-    setResetErr("");
-    setCodeSent(false);
   };
 
   return (
@@ -202,17 +130,6 @@ export default function ProfileSettingsModal({ open, user, onClose, onUserChange
         <form onSubmit={submitPassword} className="profile-form profile-form--bordered">
           <h4 className="profile-section-title">Change password</h4>
           <label className="auth-field">
-            <span className="field-label">Current password</span>
-            <input
-              type="password"
-              className="field-input"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </label>
-          <label className="auth-field">
             <span className="field-label">New password</span>
             <input
               type="password"
@@ -225,7 +142,7 @@ export default function ProfileSettingsModal({ open, user, onClose, onUserChange
             />
           </label>
           <label className="auth-field">
-            <span className="field-label">Confirm new password</span>
+            <span className="field-label">Confirm password</span>
             <input
               type="password"
               className="field-input"
@@ -237,7 +154,7 @@ export default function ProfileSettingsModal({ open, user, onClose, onUserChange
             />
           </label>
           <p className="profile-forgot-wrap">
-            <button type="button" className="link-btn" onClick={openForgot}>
+            <button type="button" className="link-btn" onClick={() => setForgotOpen(true)}>
               Forgot password?
             </button>
           </p>
@@ -268,87 +185,11 @@ export default function ProfileSettingsModal({ open, user, onClose, onUserChange
                 Cancel
               </button>
             </div>
-
-            {!codeSent ? (
-              <form onSubmit={sendResetCode} className="profile-form">
-                <label className="auth-field">
-                  <span className="field-label">Email</span>
-                  <input
-                    type="email"
-                    className="field-input"
-                    value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
-                    required
-                    autoComplete="email"
-                  />
-                </label>
-                {resetErr && <p className="auth-error">{resetErr}</p>}
-                <div className="btn-row">
-                  <button type="submit" className="btn btn-primary" disabled={resetBusy}>
-                    {resetBusy ? "Sending…" : "Send reset code"}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <form onSubmit={submitResetPassword} className="profile-form">
-                {resetMsg && <p className="auth-success">{resetMsg}</p>}
-                <label className="auth-field">
-                  <span className="field-label">Reset code</span>
-                  <input
-                    type="text"
-                    className="field-input"
-                    value={resetCode}
-                    onChange={(e) => setResetCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    inputMode="numeric"
-                    pattern="[0-9]{6}"
-                    maxLength={6}
-                    required
-                    placeholder="6-digit code"
-                  />
-                </label>
-                <label className="auth-field">
-                  <span className="field-label">New password</span>
-                  <input
-                    type="password"
-                    className="field-input"
-                    value={resetNewPassword}
-                    onChange={(e) => setResetNewPassword(e.target.value)}
-                    autoComplete="new-password"
-                    minLength={6}
-                    required
-                  />
-                </label>
-                <label className="auth-field">
-                  <span className="field-label">Confirm new password</span>
-                  <input
-                    type="password"
-                    className="field-input"
-                    value={resetConfirmPassword}
-                    onChange={(e) => setResetConfirmPassword(e.target.value)}
-                    autoComplete="new-password"
-                    minLength={6}
-                    required
-                  />
-                </label>
-                {resetErr && <p className="auth-error">{resetErr}</p>}
-                <div className="btn-row">
-                  <button type="submit" className="btn btn-primary" disabled={resetBusy}>
-                    {resetBusy ? "Resetting…" : "Reset password"}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => {
-                      setCodeSent(false);
-                      setResetMsg("");
-                      setResetErr("");
-                    }}
-                  >
-                    Resend code
-                  </button>
-                </div>
-              </form>
-            )}
+            <ForgotPasswordForm
+              initialEmail={user.email}
+              showBackLink={false}
+              onSuccess={() => setForgotOpen(false)}
+            />
           </div>
         )}
       </div>

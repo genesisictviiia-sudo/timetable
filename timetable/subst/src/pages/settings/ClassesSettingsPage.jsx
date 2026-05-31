@@ -10,10 +10,8 @@ import {
   validateCsvFormat,
 } from "../../lib/csvSample";
 import { moveRowById } from "../../lib/reorderRows";
-import { getClassLessonStats } from "../../lib/settingsStorage";
+import { getClassLessonStats, loadClassesStorageRaw, saveClassesStorageRaw } from "../../lib/settingsStorage";
 import "../../App.css";
-
-const CLASSES_STORAGE_KEY = "classes";
 
 function newRow() {
   return {
@@ -39,10 +37,9 @@ export default function ClassesSettingsPage() {
   }, [rows, lessonsRevision]);
 
   useEffect(() => {
-    const raw = localStorage.getItem(CLASSES_STORAGE_KEY);
-    if (!raw) return;
+    const parsed = loadClassesStorageRaw();
+    if (!parsed) return;
     try {
-      const parsed = JSON.parse(raw);
       let list = [];
 
       if (Array.isArray(parsed)) {
@@ -173,7 +170,7 @@ export default function ClassesSettingsPage() {
       })),
     };
 
-    localStorage.setItem(CLASSES_STORAGE_KEY, JSON.stringify(payload));
+    saveClassesStorageRaw(payload);
     setRows((prev) => prev.map((r) => ({ ...r, selected: false })));
     alert("Class list saved successfully.");
   };
@@ -316,4 +313,4 @@ export default function ClassesSettingsPage() {
   );
 }
 
-export { CLASSES_STORAGE_KEY };
+export { CLASSES_STORAGE_KEY } from "../../lib/settingsStorage";

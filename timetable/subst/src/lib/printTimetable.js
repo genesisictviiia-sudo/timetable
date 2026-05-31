@@ -1,15 +1,11 @@
 import { getCellCard } from "./timetableValidation";
-import { loadSubjects } from "./settingsStorage";
+import { loadSchoolStorageRaw, loadSubjects } from "./settingsStorage";
 import { getTeacherLessonAt, listTeachersForView } from "./teacherTimetableView";
-
-const SCHOOL_STORAGE_KEY = "school";
 
 /** Read the institution / school name from settings. Returns "" if unset. */
 export function loadInstitutionName() {
   try {
-    const raw = localStorage.getItem(SCHOOL_STORAGE_KEY);
-    if (!raw) return "";
-    const parsed = JSON.parse(raw);
+    const parsed = loadSchoolStorageRaw();
     return String(parsed?.schoolName || "").trim();
   } catch {
     return "";
@@ -42,9 +38,8 @@ function toShortSubject(subject, shortMap) {
  */
 export function loadSchoolPeriodColumns(timetable) {
   try {
-    const raw = localStorage.getItem(SCHOOL_STORAGE_KEY);
-    if (!raw) return buildPeriodColumnsFromTimetable(timetable);
-    const school = JSON.parse(raw);
+    const school = loadSchoolStorageRaw();
+    if (!school) return buildPeriodColumnsFromTimetable(timetable);
     const rows = Array.isArray(school?.periods) ? school.periods : [];
     if (!rows.length) return buildPeriodColumnsFromTimetable(timetable);
 

@@ -1,9 +1,9 @@
 import {
-  SCHOOL_STORAGE_KEY,
   getClassLessons,
   loadClassLessonsMap,
   loadClassesList,
   loadSchoolConstraints,
+  loadSchoolStorageRaw,
   loadSubjects,
   loadTeachersFull,
   normalizeTimeOffGrid,
@@ -13,18 +13,8 @@ import { buildInteractiveTimetableFromGeneration } from "./timetableValidation";
 const SCHOOL_DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const SHORT_DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-function readJson(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
 function loadSchoolRecord() {
-  return readJson(SCHOOL_STORAGE_KEY, null);
+  return loadSchoolStorageRaw();
 }
 
 function teacherBusyKey(teacher, day, period) {

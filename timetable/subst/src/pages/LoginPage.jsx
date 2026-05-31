@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ForgotPasswordForm from "../components/ForgotPasswordForm";
 import { login, signup } from "../lib/authStorage";
 
 export default function LoginPage({ onAuthed }) {
@@ -8,6 +9,7 @@ export default function LoginPage({ onAuthed }) {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [forgotDone, setForgotDone] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -27,6 +29,39 @@ export default function LoginPage({ onAuthed }) {
   };
 
   const isSignup = mode === "signup";
+  const isForgot = mode === "forgot";
+
+  const switchMode = (next) => {
+    setMode(next);
+    setError("");
+    setForgotDone(false);
+  };
+
+  if (isForgot) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card card">
+          <h2 className="card-title">Reset password</h2>
+          {forgotDone ? (
+            <>
+              <p className="auth-success">Your password was reset. Sign in with your new password.</p>
+              <div className="btn-row">
+                <button type="button" className="btn btn-primary" onClick={() => switchMode("login")}>
+                  Back to sign in
+                </button>
+              </div>
+            </>
+          ) : (
+            <ForgotPasswordForm
+              initialEmail={email}
+              onBack={() => switchMode("login")}
+              onSuccess={() => setForgotDone(true)}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-page">
@@ -80,6 +115,14 @@ export default function LoginPage({ onAuthed }) {
             />
           </label>
 
+          {!isSignup && (
+            <p className="profile-forgot-wrap">
+              <button type="button" className="link-btn" onClick={() => switchMode("forgot")}>
+                Forgot password?
+              </button>
+            </p>
+          )}
+
           {error && <p className="auth-error">{error}</p>}
 
           <div className="btn-row">
@@ -89,10 +132,7 @@ export default function LoginPage({ onAuthed }) {
             <button
               type="button"
               className="btn btn-ghost"
-              onClick={() => {
-                setMode(isSignup ? "login" : "signup");
-                setError("");
-              }}
+              onClick={() => switchMode(isSignup ? "login" : "signup")}
               disabled={busy}
             >
               {isSignup ? "I already have an account" : "Create a new account"}

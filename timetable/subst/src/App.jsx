@@ -7,6 +7,7 @@ import LoginPage from "./pages/LoginPage";
 import UserAvatar from "./components/UserAvatar";
 import ProfileSettingsModal from "./components/ProfileSettingsModal";
 import { getCurrentUser, logout } from "./lib/authStorage";
+import { onUserSessionStarted } from "./lib/userDataStorage";
 import "./App.css";
 
 const NAV_ITEMS = [
@@ -18,7 +19,13 @@ const NAV_ITEMS = [
 
 function App() {
   const [activeTab, setActiveTab] = useState("home");
-  const [user, setUser] = useState(() => getCurrentUser());
+  const [user, setUser] = useState(() => {
+    const current = getCurrentUser();
+    if (current?.email) {
+      onUserSessionStarted(current.email, { isNewAccount: false });
+    }
+    return current;
+  });
   const [profileOpen, setProfileOpen] = useState(false);
 
   if (!user) {
@@ -96,7 +103,9 @@ function App() {
         ))}
       </nav>
 
-      <main className="app-main">{renderPage()}</main>
+      <main className="app-main" key={user.email}>
+        {renderPage()}
+      </main>
 
       <ProfileSettingsModal
         open={profileOpen}

@@ -1,28 +1,18 @@
 import {
-  SCHOOL_STORAGE_KEY,
   createDefaultTimeOffGrid,
   getClassLessons,
   loadClassLessonsMap,
   loadClassesList,
   loadSchoolConstraints,
+  loadSchoolStorageRaw,
   loadSubjects,
   loadTeachersFull,
 } from "./settingsStorage";
 import { normalizeCard } from "./timetableValidation";
 
-function readJson(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
-}
-
 /** Capture school / teacher / class data at generation time (frozen copy). */
 export function captureTimetableSnapshot() {
-  const school = readJson(SCHOOL_STORAGE_KEY, null) || {};
+  const school = loadSchoolStorageRaw() || {};
   const teachers = loadTeachersFull();
   const classes = loadClassesList().filter((c) => c.label);
   const classLessonsMap = loadClassLessonsMap();

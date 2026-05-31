@@ -1,12 +1,19 @@
 import { captureTimetableSnapshotFromTimetable, freezeTimetable } from "./timetableSnapshot";
 import { migrateTimetableFormat } from "./timetableValidation";
+import {
+  readUserJson,
+  writeUserJson,
+  removeUserItem,
+  readUserRaw,
+  writeUserRaw,
+} from "./userDataStorage";
 
 export const TIMETABLE_STORAGE_KEY = "generatedTimetable-v1";
 
 function readRawTimetable() {
+  const raw = readUserRaw(TIMETABLE_STORAGE_KEY);
+  if (!raw) return null;
   try {
-    const raw = localStorage.getItem(TIMETABLE_STORAGE_KEY);
-    if (!raw) return null;
     return JSON.parse(raw);
   } catch {
     return null;
@@ -42,9 +49,9 @@ export function saveGeneratedTimetable(data, { freeze = false } = {}) {
     payload = freezeTimetable(payload);
   }
 
-  localStorage.setItem(TIMETABLE_STORAGE_KEY, JSON.stringify(payload));
+  writeUserJson(TIMETABLE_STORAGE_KEY, payload);
 }
 
 export function clearGeneratedTimetable() {
-  localStorage.removeItem(TIMETABLE_STORAGE_KEY);
+  removeUserItem(TIMETABLE_STORAGE_KEY);
 }
