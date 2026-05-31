@@ -1239,6 +1239,11 @@ td.warn {
   color: #dc2626;
 }
 
+.timeoff-cell--capped {
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+
 .timeoff-grid__extra-col {
   color: #64748b;
   font-style: italic;
@@ -1554,9 +1559,12 @@ td.warn {
   color: #94a3b8;
 }
 
-.tt-grid--teacher-view .tt-grid__cell {
-  vertical-align: top;
-  min-width: 72px;
+.tt-card--dense .tt-card__class {
+  margin-top: 0;
+  font-size: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tt-warning--inline {
@@ -1744,6 +1752,21 @@ td.warn {
 
 .tt-grid__cell--empty {
   background: #f8fafc;
+}
+
+.tt-grid__cell--blocked {
+  background: #e2e8f0;
+  pointer-events: none;
+}
+
+.tt-grid__blocked-slot {
+  display: block;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 2.2rem;
+  user-select: none;
 }
 
 .tt-grid__cell--drop-target {

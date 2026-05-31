@@ -117,9 +117,13 @@ function buildAllowedTeacherSet(teachers, classLessonsMap, classId, classLabel, 
   return allowed;
 }
 
-function getTeacherTimeOffGrid(teacher, daysPerWeek, periodsPerDay, totalPeriodSlots) {
-  const cols = totalPeriodSlots ?? periodsPerDay;
-  return normalizeTimeOffGrid(teacher.timeOffGrid, daysPerWeek, periodsPerDay, cols);
+function getTeacherTimeOffGrid(teacher, daysPerWeek, periodsPerDay, periodsPerWeek) {
+  return normalizeTimeOffGrid(
+    teacher.timeOffGrid,
+    daysPerWeek,
+    periodsPerDay,
+    periodsPerWeek
+  );
 }
 
 function maxConsecutiveRun(periods) {
@@ -147,7 +151,7 @@ function createGeneratorState({
   classes,
   daysPerWeek,
   periodsPerDay,
-  totalPeriodSlots,
+  periodsPerWeek,
   teachers,
   constraints,
 }) {
@@ -166,7 +170,7 @@ function createGeneratorState({
       t,
       daysPerWeek,
       periodsPerDay,
-      totalPeriodSlots
+      periodsPerWeek
     );
     teacherDayCount[t.name] = Array(daysPerWeek).fill(0);
     teacherDayPeriods[t.name] = Array.from({ length: daysPerWeek }, () => []);
@@ -185,6 +189,8 @@ function createGeneratorState({
     teacherDayCount,
     teacherDayPeriods,
     teacherTimeOff,
+    periodsPerDay,
+    periodsPerWeek,
     maxPerDay: Number.isFinite(maxPerDay) && maxPerDay > 0 ? maxPerDay : null,
     maxConsecutive: Number.isFinite(maxConsecutive) && maxConsecutive > 0 ? maxConsecutive : null,
     schoolClassTeacherFirstPeriod: Boolean(constraints.classTeacherFirstPeriod),
@@ -595,6 +601,7 @@ function runOneGeneration(data, attempt = 0) {
     classLessonsMap,
     daysPerWeek,
     periodsPerDay,
+    periodsPerWeek,
     dayNames,
     dayLabels,
     periodLabels,
@@ -609,7 +616,7 @@ function runOneGeneration(data, attempt = 0) {
     classes,
     daysPerWeek,
     periodsPerDay,
-    totalPeriodSlots: data.totalPeriodSlots,
+    periodsPerWeek: data.periodsPerWeek,
     teachers,
     constraints,
   });
@@ -665,6 +672,7 @@ function runOneGeneration(data, attempt = 0) {
     classGrids: state.classGrids,
     daysPerWeek,
     periodsPerDay,
+    periodsPerWeek,
     dayNames,
     dayLabels,
     periodLabels,
@@ -745,7 +753,7 @@ export function validateTimetableInputs() {
     return { ok: false, errors, warnings, data: null };
   }
 
-  const slotsPerClass = daysPerWeek * periodsPerDay;
+  const slotsPerClass = Math.min(daysPerWeek * periodsPerDay, periodsPerWeek);
   for (const cls of classes) {
     const rows = getClassLessons(cls.id);
     const total = rows.reduce((sum, r) => sum + (Number(r.lessonsPerWeek) || 0), 0);

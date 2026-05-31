@@ -3,6 +3,7 @@ import TimetableCard from "./TimetableCard";
 export default function BottomTray({
   tray,
   classLabel,
+  trayLabel,
   onDragStart,
   onDragEnd,
   onToggleFixed,
@@ -12,6 +13,7 @@ export default function BottomTray({
   onDragLeave,
 }) {
   const count = tray?.length ?? 0;
+  const title = trayLabel || (classLabel ? `Lessons left for ${classLabel}` : "Lesson tray");
 
   return (
     <section
@@ -31,13 +33,11 @@ export default function BottomTray({
       aria-label={classLabel ? `Lesson tray for ${classLabel}` : "Lesson tray"}
     >
       <div className="tt-tray__header">
-        <h3 className="tt-tray__title">
-          {classLabel ? `Lessons left for ${classLabel}` : "Lesson tray"}
-        </h3>
-        <span className="tt-tray__count">{count} in this class</span>
+        <h3 className="tt-tray__title">{title}</h3>
+        <span className="tt-tray__count">{count} in tray</span>
       </div>
       {count === 0 ? (
-        <p className="tt-tray__empty">No lessons in tray for this class.</p>
+        <p className="tt-tray__empty">No lessons in tray.</p>
       ) : (
         <div className="tt-tray__list">
           {tray.map((card) => (

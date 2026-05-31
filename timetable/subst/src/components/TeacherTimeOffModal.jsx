@@ -29,15 +29,14 @@ export default function TeacherTimeOffModal({ open, teacher, onClose, onSave }) 
         teacher.timeOffGrid,
         schedule.daysPerWeek,
         schedule.lessonPeriodsPerDay,
-        schedule.totalPeriodSlots
+        schedule.periodsPerWeek
       )
     );
   }, [open, teacher, onClose]);
 
   if (!open || !teacher || !dims) return null;
 
-  const { daysPerWeek, lessonPeriodsPerDay, totalPeriodSlots, periodLabels } = dims;
-  const cols = totalPeriodSlots;
+  const { daysPerWeek, lessonPeriodsPerDay, periodsPerWeek, periodLabels } = dims;
 
   const toggleCell = (dayIndex, periodIndex) => {
     setGrid((prev) =>
@@ -47,18 +46,14 @@ export default function TeacherTimeOffModal({ open, teacher, onClose, onSave }) 
     );
   };
 
-  const columnLabel = (p) => {
-    const name = periodLabels[p];
-    const isExtra = p >= lessonPeriodsPerDay;
-    return isExtra ? `${name || `P${p + 1}`}*` : name || `P${p + 1}`;
-  };
+  const columnLabel = (p) => periodLabels[p] || `P${p + 1}`;
 
   const handleSave = () => {
     onSave(teacher.id, {
       daysPerWeek,
       lessonPeriodsPerDay,
-      totalPeriodSlots: cols,
       periodsPerDay: lessonPeriodsPerDay,
+      periodsPerWeek,
       cells: grid,
     });
     onClose();
@@ -76,8 +71,8 @@ export default function TeacherTimeOffModal({ open, teacher, onClose, onSave }) 
           Time off — {teacher.name}
         </h3>
         <p className="card-desc">
-          First 5 days default to all available (✓). From day 6 onward, lesson periods (P1–P{lessonPeriodsPerDay}) default
-          to ✓; extra columns (*) default to ✗. Orange ✓ = available, blue ✗ = unavailable.
+          Set availability for lesson periods only (breaks are not shown). All slots default to
+          available (✓). Mark slots as unavailable (✗) where this teacher cannot be scheduled.
         </p>
 
         <div className="timeoff-grid-wrap settings-form-compact">
@@ -85,10 +80,8 @@ export default function TeacherTimeOffModal({ open, teacher, onClose, onSave }) 
             <thead>
               <tr>
                 <th className="timeoff-grid__corner">Day</th>
-                {Array.from({ length: cols }, (_, p) => (
-                  <th key={p} className={p >= lessonPeriodsPerDay ? "timeoff-grid__extra-col" : ""}>
-                    {columnLabel(p)}
-                  </th>
+                {Array.from({ length: lessonPeriodsPerDay }, (_, p) => (
+                  <th key={p}>{columnLabel(p)}</th>
                 ))}
               </tr>
             </thead>

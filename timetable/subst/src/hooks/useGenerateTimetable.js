@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { generateTimetable, validateTimetableInputs } from "../lib/generateTimetable";
+import { countPlacedSlotsOnGrid } from "../lib/timetableValidation";
 import { freezeTimetable } from "../lib/timetableSnapshot";
 import { loadGeneratedTimetable, saveGeneratedTimetable } from "../lib/timetableStorage";
 
@@ -63,7 +64,7 @@ export function useGenerateTimetable(onGenerated) {
   }, [onGenerated]);
 
   const relaxationText = lastResult ? formatRelaxationSummary(lastResult.relaxations) : null;
-  const placedOnGrid = lastResult ? Object.keys(lastResult.cells || {}).length : 0;
+  const placedOnGrid = lastResult ? countPlacedSlotsOnGrid(lastResult) : 0;
 
   return {
     initialCheck,

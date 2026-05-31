@@ -34,7 +34,10 @@ export function captureTimetableSnapshot() {
     academicYear: school.academicYear || "",
     daysPerWeek: Number(school.daysPerWeek) || 5,
     periodsPerDay: Number(school.periodsPerDay) || 1,
-    periodsPerWeek: Number(school.periodsPerWeek) || 0,
+    periodsPerWeek:
+      Number(school.periodsPerWeek) > 0
+        ? Number(school.periodsPerWeek)
+        : (Number(school.daysPerWeek) || 5) * (Number(school.periodsPerDay) || 1),
     dayLabels: [...(school.dayLabels || school.dayNames || [])],
     dayNames: [...(school.dayNames || school.dayLabels || [])],
     periodLabels: [...(school.periodLabels || [])],
@@ -68,7 +71,11 @@ export function captureTimetableSnapshot() {
 export function captureTimetableSnapshotFromTimetable(timetable) {
   const daysPerWeek = timetable.daysPerWeek || 5;
   const periodsPerDay = timetable.periodsPerDay || 1;
-  const timeOffGrid = createDefaultTimeOffGrid(daysPerWeek, periodsPerDay, periodsPerDay);
+  const periodsPerWeek =
+    Number(timetable.periodsPerWeek) > 0
+      ? Number(timetable.periodsPerWeek)
+      : daysPerWeek * periodsPerDay;
+  const timeOffGrid = createDefaultTimeOffGrid(daysPerWeek, periodsPerDay, periodsPerWeek);
 
   const teacherNames = listTeachersFromTimetable(timetable);
   const teachers = teacherNames.map((name) => ({
@@ -83,7 +90,7 @@ export function captureTimetableSnapshotFromTimetable(timetable) {
     academicYear: timetable.academicYear || "",
     daysPerWeek,
     periodsPerDay,
-    periodsPerWeek: daysPerWeek * periodsPerDay,
+    periodsPerWeek,
     dayLabels: [...(timetable.dayLabels || timetable.dayNames || [])],
     dayNames: [...(timetable.dayNames || timetable.dayLabels || [])],
     periodLabels: [...(timetable.periodLabels || [])],

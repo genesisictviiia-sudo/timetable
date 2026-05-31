@@ -8,17 +8,9 @@ import TimetableGrid from "../components/TimetableGrid";
 import { useGenerateTimetable } from "../hooks/useGenerateTimetable";
 import { buildPrintData } from "../lib/printTimetable";
 import { countTeacherLessons, listTeachersForView } from "../lib/teacherTimetableView";
-import { removeCardToTray, toggleCardFixed } from "../lib/timetableValidation";
+import { getAllottedLessonsPerWeek, getSchoolPeriodsPerWeek, removeCardToTray, toggleCardFixed } from "../lib/timetableValidation";
 import { loadGeneratedTimetable, saveGeneratedTimetable } from "../lib/timetableStorage";
 import "../App.css";
-
-function countPlacedForClass(timetable, classId) {
-  let n = 0;
-  for (const key of Object.keys(timetable.cells || {})) {
-    if (key.startsWith(`${classId}|`)) n++;
-  }
-  return n;
-}
 
 export default function TimetablePage() {
   const [timetable, setTimetable] = useState(null);
@@ -97,15 +89,17 @@ export default function TimetablePage() {
     return timetable.tray.filter((c) => c.classId === currentClass.id);
   }, [timetable?.tray, currentClass]);
 
-  const placedForClass = useMemo(() => {
-    if (!timetable || !currentClass) return 0;
-    return countPlacedForClass(timetable, currentClass.id);
-  }, [timetable, currentClass]);
+  const teacherTrayCards = useMemo(() => {
+    if (!timetable?.tray?.length || !currentTeacher) return [];
+    return timetable.tray.filter((c) => c.teachers?.includes(currentTeacher));
+  }, [timetable?.tray, currentTeacher]);
 
-  const slotsPerClass = useMemo(() => {
-    if (!timetable) return 0;
-    return (timetable.daysPerWeek || 0) * (timetable.periodsPerDay || 0);
-  }, [timetable]);
+  const allottedForClass = useMemo(() => {
+    if (!currentClass) return 0;
+    return getAllottedLessonsPerWeek(currentClass.id);
+  }, [currentClass]);
+
+  const schoolPeriodsPerWeek = getSchoolPeriodsPerWeek();
 
   const handleTimetableChange = useCallback(
     (next) => {
@@ -250,10 +244,15 @@ export default function TimetablePage() {
                   Teacher Timetable
                 </button>
               </div>
-              {isClassView && (
+              {isClassView ? (
                 <div className="tt-tray-total" role="status">
                   <span className="tt-tray-total__label">Tray</span>
                   <span className="tt-tray-total__value">{totalTrayCount}</span>
+                </div>
+              ) : (
+                <div className="tt-tray-total" role="status">
+                  <span className="tt-tray-total__label">Tray</span>
+                  <span className="tt-tray-total__value">{teacherTrayCards.length}</span>
                 </div>
               )}
               <button
@@ -304,7 +303,7 @@ export default function TimetablePage() {
                   </span>
                   <h3 className="tt-class-header__title">{classTitle}</h3>
                   <span className="tt-class-header__meta">
-                    {placedForClass}/{slotsPerClass} filled · {classTrayCards.length} in tray
+                    {allottedForClass}/{schoolPeriodsPerWeek} allotted · {classTrayCards.length} in tray
                   </span>
                 </header>
 
@@ -352,41 +351,73 @@ export default function TimetablePage() {
             />
           </>
         ) : hasTimetable && !isClassView && currentTeacher ? (
-          <div className="tt-class-view">
-            <button
-              type="button"
-              className="tt-side-nav"
-              onClick={goPrev}
-              aria-label="Previous teacher"
-              title="Previous teacher"
-            >
-              ‹
-            </button>
+          <>
+            <div className="tt-class-view">
+              <button
+                type="button"
+                className="tt-side-nav"
+                onClick={goPrev}
+                aria-label="Previous teacher"
+                title="Previous teacher"
+              >
+                ‹
+              </button>
 
-            <div className="tt-class-view__main">
-              <header className="tt-class-header">
-                <span className="tt-class-header__counter">
-                  {safeTeacherIndex + 1} / {totalTeachers}
-                </span>
-                <h3 className="tt-class-header__title">{currentTeacher}</h3>
-                <span className="tt-class-header__meta">
-                  {teacherLessonsCount} lesson{teacherLessonsCount === 1 ? "" : "s"} per week · read-only
-                </span>
-              </header>
+              <div className="tt-class-view__main">
+                <header className="tt-class-header">
+                  <span className="tt-class-header__counter">
+                    {safeTeacherIndex + 1} / {totalTeachers}
+                  </span>
+                  <h3 className="tt-class-header__title">{currentTeacher}</h3>
+                  <span className="tt-class-header__meta">
+                    {teacherLessonsCount} scheduled · {teacherTrayCards.length} in tray
+                  </span>
+                </header>
 
-              <TeacherTimetableGrid timetable={timetable} teacherName={currentTeacher} />
+                <TeacherTimetableGrid
+                  timetable={timetable}
+                  teacherName={currentTeacher}
+                  draggingCardId={draggingCardId}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onTimetableChange={handleTimetableChange}
+                  onWarning={setWarning}
+                  onClearWarning={() => setWarning("")}
+                />
+              </div>
+
+              <button
+                type="button"
+                className="tt-side-nav"
+                onClick={goNext}
+                aria-label="Next teacher"
+                title="Next teacher"
+              >
+                ›
+              </button>
             </div>
 
-            <button
-              type="button"
-              className="tt-side-nav"
-              onClick={goNext}
-              aria-label="Next teacher"
-              title="Next teacher"
-            >
-              ›
-            </button>
-          </div>
+            <BottomTray
+              tray={teacherTrayCards}
+              classLabel={currentTeacher}
+              trayLabel={`Lessons left for ${currentTeacher}`}
+              dragOver={trayDragOver}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragOver={() => setTrayDragOver(true)}
+              onDragLeave={() => setTrayDragOver(false)}
+              onDropFromGrid={handleDropOnTray}
+              onToggleFixed={(cardId) => {
+                const result = toggleCardFixed(timetable, cardId);
+                if (!result.ok) {
+                  setWarning(result.message);
+                  return;
+                }
+                setWarning("");
+                persist(result.timetable);
+              }}
+            />
+          </>
         ) : hasTimetable && !isClassView && totalTeachers === 0 ? (
           <p className="card-desc tt-page__empty-hint">No teachers in General Settings. Add teachers to view teacher timetables.</p>
         ) : (

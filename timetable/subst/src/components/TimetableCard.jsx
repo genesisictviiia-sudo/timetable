@@ -8,6 +8,7 @@ export default function TimetableCard({
   onRemoveToTray,
   compact = false,
   dense = false,
+  showClassLabel = false,
 }) {
   if (!card) return null;
 
@@ -32,16 +33,20 @@ export default function TimetableCard({
       aria-label={`${card.subject} lesson`}
     >
       <div className="tt-card__subject">{card.subject}</div>
-      {teachers.length > 0 && (
-        <div className="tt-card__teachers">
-          {teachers.map((name) => (
-            <span key={name} className="tt-card__teacher">
-              {name}
-            </span>
-          ))}
-        </div>
+      {showClassLabel && classLabel ? (
+        <div className="tt-card__class">{classLabel}</div>
+      ) : (
+        teachers.length > 0 && (
+          <div className="tt-card__teachers">
+            {teachers.map((name) => (
+              <span key={name} className="tt-card__teacher">
+                {name}
+              </span>
+            ))}
+          </div>
+        )
       )}
-      {classLabel && compact && <div className="tt-card__class">{classLabel}</div>}
+      {classLabel && compact && !showClassLabel && <div className="tt-card__class">{classLabel}</div>}
       {(onToggleFixed || onRemoveToTray) && (
         <div className="tt-card__actions">
           {onToggleFixed && (

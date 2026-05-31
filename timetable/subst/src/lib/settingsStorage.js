@@ -39,29 +39,103 @@ export function loadTeachers() {
 
 const DEFAULT_WORK_DAYS = 5;
 
-/** Default: first 5 days all slots available; day 6+ lesson slots available, extra period columns unavailable. */
-export function createDefaultTimeOffGrid(daysPerWeek, lessonPeriodsPerDay, totalPeriodSlots) {
-  const cols = Math.max(totalPeriodSlots, lessonPeriodsPerDay);
-  return Array.from({ length: daysPerWeek }, (_, dayIndex) =>
-    Array.from({ length: cols }, (_, periodIndex) => {
-      if (dayIndex < DEFAULT_WORK_DAYS) return true;
-      return periodIndex < lessonPeriodsPerDay;
+export function weeklySlotIndex(day, period, periodsPerDay) {
+  return day * periodsPerDay + period;
+}
+
+/** Whether this day/period is within the school's periods-per-week limit (filled from Mon P1 onward). */
+export function isSlotWithinPeriodsPerWeek(day, period, periodsPerDay, periodsPerWeek) {
+  const max = Number(periodsPerWeek);
+  if (!Number.isFinite(max) || max < 1) return true;
+  return weeklySlotIndex(day, period, periodsPerDay) < max;
+}
+
+function resolvePeriodsPerWeek(daysPerWeek, lessonPeriodsPerDay, periodsPerWeek) {
+  const gridSlots = daysPerWeek * lessonPeriodsPerDay;
+  const n = Number(periodsPerWeek);
+  if (Number.isFinite(n) && n > 0) return Math.min(n, gridSlots);
+  return gridSlots;
+}
+
+export function applyPeriodsPerWeekCapToTimeOffGrid(
+  grid,
+  daysPerWeek,
+  lessonPeriodsPerDay,
+  periodsPerWeek
+) {
+  const allowed = resolvePeriodsPerWeek(daysPerWeek, lessonPeriodsPerDay, periodsPerWeek);
+  return grid.map((row, d) =>
+    row.map((cell, p) => {
+      if (!isSlotWithinPeriodsPerWeek(d, p, lessonPeriodsPerDay, allowed)) return false;
+      return cell;
     })
   );
 }
 
-export function normalizeTimeOffGrid(saved, daysPerWeek, lessonPeriodsPerDay, totalPeriodSlots) {
-  const cols = Math.max(totalPeriodSlots, lessonPeriodsPerDay);
-  const grid = createDefaultTimeOffGrid(daysPerWeek, lessonPeriodsPerDay, cols);
+/** Default time off grid: all lesson slots available until the teacher marks them off. */
+export function createDefaultTimeOffGrid(daysPerWeek, lessonPeriodsPerDay, _periodsPerWeek) {
+  return Array.from({ length: daysPerWeek }, () =>
+    Array.from({ length: lessonPeriodsPerDay }, () => true)
+  );
+}
 
+function lessonSlotIndicesFromSchool(school) {
+  const rows = Array.isArray(school?.periods) ? school.periods : [];
+  if (!rows.length) return null;
+  const indices = rows.map((p, i) => (p.type === "break" ? -1 : i)).filter((i) => i >= 0);
+  return indices.length ? indices : null;
+}
+
+/** Map a saved grid that included break columns to lesson-only columns. */
+function migrateSavedTimeOffToLessonGrid(
+  saved,
+  daysPerWeek,
+  lessonPeriodsPerDay,
+  periodsPerWeek
+) {
+  const grid = createDefaultTimeOffGrid(daysPerWeek, lessonPeriodsPerDay, periodsPerWeek);
+  if (!saved?.cells || !Array.isArray(saved.cells)) return grid;
+
+  const savedCols = saved.cells[0]?.length ?? 0;
+  if (savedCols === lessonPeriodsPerDay) {
+    for (let d = 0; d < daysPerWeek; d++) {
+      for (let p = 0; p < lessonPeriodsPerDay; p++) {
+        if (saved.cells[d]?.[p] !== undefined) grid[d][p] = Boolean(saved.cells[d][p]);
+      }
+    }
+    return grid;
+  }
+
+  const school = readJson(SCHOOL_STORAGE_KEY, null);
+  const lessonSlots = lessonSlotIndicesFromSchool(school);
+  if (!lessonSlots || lessonSlots.length !== lessonPeriodsPerDay) {
+    return grid;
+  }
+
+  for (let d = 0; d < daysPerWeek; d++) {
+    for (let lp = 0; lp < lessonPeriodsPerDay; lp++) {
+      const slot = lessonSlots[lp];
+      if (saved.cells[d]?.[slot] !== undefined) grid[d][lp] = Boolean(saved.cells[d][slot]);
+    }
+  }
+  return grid;
+}
+
+export function normalizeTimeOffGrid(saved, daysPerWeek, lessonPeriodsPerDay, periodsPerWeek) {
+  const cols = lessonPeriodsPerDay;
+  const grid = createDefaultTimeOffGrid(daysPerWeek, lessonPeriodsPerDay, periodsPerWeek);
+
+  const savedCols = saved?.cells?.[0]?.length ?? 0;
   const dimsMatch =
     saved?.cells &&
     Array.isArray(saved.cells) &&
     saved.daysPerWeek === daysPerWeek &&
     (saved.lessonPeriodsPerDay === lessonPeriodsPerDay || saved.periodsPerDay === lessonPeriodsPerDay) &&
-    (saved.totalPeriodSlots === cols || !saved.totalPeriodSlots);
+    savedCols === cols;
 
-  if (!dimsMatch) return grid;
+  if (!dimsMatch) {
+    return migrateSavedTimeOffToLessonGrid(saved, daysPerWeek, lessonPeriodsPerDay, periodsPerWeek);
+  }
 
   for (let d = 0; d < daysPerWeek; d++) {
     for (let p = 0; p < cols; p++) {
@@ -89,11 +163,24 @@ export function loadSchoolScheduleDimensions() {
     return null;
   }
 
+  const lessonPeriodRows = periodRows.filter((p) => p.type !== "break");
+  const lessonPeriodLabels =
+    lessonPeriodRows.length > 0
+      ? lessonPeriodRows.map((p, i) => p.name?.trim() || `P${i + 1}`)
+      : Array.from({ length: lessonPeriodsPerDay }, (_, i) => `P${i + 1}`);
+
+  const periodsPerWeekRaw = Number(school?.periodsPerWeek);
+  const periodsPerWeek =
+    Number.isFinite(periodsPerWeekRaw) && periodsPerWeekRaw > 0
+      ? Math.min(periodsPerWeekRaw, daysPerWeek * lessonPeriodsPerDay)
+      : daysPerWeek * lessonPeriodsPerDay;
+
   return {
     daysPerWeek,
     lessonPeriodsPerDay,
+    periodsPerWeek,
     totalPeriodSlots: Math.max(totalPeriodSlots, lessonPeriodsPerDay),
-    periodLabels: periodRows.map((p, i) => p.name?.trim() || `P${i + 1}`),
+    periodLabels: lessonPeriodLabels,
   };
 }
 

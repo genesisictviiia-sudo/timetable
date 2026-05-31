@@ -1,6 +1,22 @@
-import { getTeacherLessonAt } from "../lib/teacherTimetableView";
+import { useMemo } from "react";
+import {
+  buildTeacherPlacementPreview,
+  getTeacherCardAt,
+  teacherGridKey,
+} from "../lib/teacherTimetableView";
+import { findCardById, moveCardToSlot, removeCardToTray, toggleCardFixed } from "../lib/timetableValidation";
+import TimetableCard from "./TimetableCard";
 
-export default function TeacherTimetableGrid({ timetable, teacherName }) {
+export default function TeacherTimetableGrid({
+  timetable,
+  teacherName,
+  draggingCardId,
+  onDragStart,
+  onDragEnd,
+  onTimetableChange,
+  onWarning,
+  onClearWarning,
+}) {
   if (!timetable || !teacherName) {
     return <p className="card-desc">No teacher selected.</p>;
   }
@@ -8,6 +24,11 @@ export default function TeacherTimetableGrid({ timetable, teacherName }) {
   const columns = timetable.columns || [];
   const periodsPerDay = timetable.periodsPerDay || 1;
   const dayLabels = timetable.dayLabels || timetable.dayNames || [];
+
+  const placementPreview = useMemo(() => {
+    if (!draggingCardId) return null;
+    return buildTeacherPlacementPreview(timetable, draggingCardId, teacherName);
+  }, [timetable, draggingCardId, teacherName]);
 
   const uniquePeriods = [];
   for (let p = 0; p < periodsPerDay; p++) {
@@ -26,9 +47,43 @@ export default function TeacherTimetableGrid({ timetable, teacherName }) {
     });
   }
 
+  const isDragging = Boolean(draggingCardId);
+
+  const applyChange = (result) => {
+    if (!result.ok) {
+      onWarning?.(result.message);
+      return;
+    }
+    onClearWarning?.();
+    onTimetableChange(result.timetable);
+  };
+
+  const handleDropOnCell = (day, period, e) => {
+    e.preventDefault();
+    const cardId = e.dataTransfer.getData("text/plain") || draggingCardId;
+    if (!cardId) return;
+
+    const found = findCardById(timetable, cardId);
+    if (!found.card?.classId) return;
+
+    const result = moveCardToSlot(timetable, cardId, found.card.classId, day, period);
+    applyChange(result);
+    onDragEnd?.();
+  };
+
+  const handleRemoveToTray = (cardId) => {
+    const result = removeCardToTray(timetable, cardId);
+    applyChange(result);
+  };
+
+  const handleToggleFixed = (cardId) => {
+    const result = toggleCardFixed(timetable, cardId);
+    applyChange(result);
+  };
+
   return (
-    <div className="tt-grid-wrap">
-      <table className="period-table tt-grid tt-grid--teacher-view">
+    <div className={`tt-grid-wrap${isDragging ? " tt-grid-wrap--placing" : ""}`}>
+      <table className="period-table tt-grid tt-grid--single-class">
         <thead>
           <tr>
             <th className="tt-grid__day-col">Day</th>
@@ -46,22 +101,38 @@ export default function TeacherTimetableGrid({ timetable, teacherName }) {
                 {dayLabel}
               </th>
               {uniquePeriods.map(({ period }) => {
-                const lesson = getTeacherLessonAt(timetable, teacherName, day, period);
+                const gridKey = teacherGridKey(day, period);
+                const entry = getTeacherCardAt(timetable, teacherName, day, period);
+                const isEmpty = !entry;
+
+                let placeClass = "";
+                if (isDragging && placementPreview) {
+                  placeClass = placementPreview[gridKey]
+                    ? " tt-grid__cell--can-place"
+                    : " tt-grid__cell--cannot-place";
+                }
+
                 return (
                   <td
-                    key={`${day}-${period}`}
-                    className={`tt-grid__cell${lesson ? "" : " tt-grid__cell--empty"}`}
+                    key={gridKey}
+                    className={`tt-grid__cell${isEmpty ? " tt-grid__cell--empty" : ""}${placeClass}`}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = placementPreview?.[gridKey] ? "move" : "none";
+                    }}
+                    onDrop={(e) => handleDropOnCell(day, period, e)}
                   >
-                    {lesson ? (
-                      <div className="tt-teacher-cell">
-                        <div className="tt-teacher-cell__subject">{lesson.subject}</div>
-                        <div className="tt-teacher-cell__class">{lesson.classLabel}</div>
-                        {lesson.teachers.length > 1 && (
-                          <div className="tt-teacher-cell__co">
-                            + {lesson.teachers.filter((t) => t !== teacherName).join(", ")}
-                          </div>
-                        )}
-                      </div>
+                    {entry ? (
+                      <TimetableCard
+                        card={entry.card}
+                        classLabel={entry.card.classLabel}
+                        showClassLabel
+                        dense
+                        onDragStart={onDragStart}
+                        onDragEnd={onDragEnd}
+                        onToggleFixed={handleToggleFixed}
+                        onRemoveToTray={handleRemoveToTray}
+                      />
                     ) : (
                       <span className="tt-grid__empty-slot" aria-hidden>
                         —

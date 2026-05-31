@@ -2,9 +2,11 @@ import { getSnapshotTeachers } from "./timetableSnapshot";
 import {
   getClassLessons,
   loadClassLessonsMap,
-  loadSchoolScheduleDimensions,
+  loadSchoolPeriodsPerWeek,
   loadTeachersFull,
   normalizeTimeOffGrid,
+  isSlotWithinPeriodsPerWeek,
+  getClassLessonStats,
 } from "./settingsStorage";
 
 export function makeSlotKey(classId, day, period) {
@@ -94,10 +96,68 @@ export function buildColumns(dayLabels, periodLabels, daysPerWeek, periodsPerDay
   return columns;
 }
 
-function getTeacherTimeOffGrid(teacher, daysPerWeek, periodsPerDay) {
-  const schedule = loadSchoolScheduleDimensions();
-  const totalPeriodSlots = schedule?.totalPeriodSlots ?? periodsPerDay;
-  return normalizeTimeOffGrid(teacher.timeOffGrid, daysPerWeek, periodsPerDay, totalPeriodSlots);
+function getTeacherTimeOffGrid(teacher, daysPerWeek, periodsPerDay, periodsPerWeek) {
+  const ppw =
+    periodsPerWeek ??
+    loadSchoolPeriodsPerWeek() ??
+    daysPerWeek * periodsPerDay;
+  return normalizeTimeOffGrid(teacher.timeOffGrid, daysPerWeek, periodsPerDay, ppw);
+}
+
+function resolvePeriodsPerWeek(timetable) {
+  const fromTimetable = Number(timetable?.periodsPerWeek);
+  if (Number.isFinite(fromTimetable) && fromTimetable > 0) return fromTimetable;
+  const fromSnapshot = Number(timetable?.snapshot?.periodsPerWeek);
+  if (Number.isFinite(fromSnapshot) && fromSnapshot > 0) return fromSnapshot;
+  const fromSnapshotSchool = Number(timetable?.snapshot?.school?.periodsPerWeek);
+  if (Number.isFinite(fromSnapshotSchool) && fromSnapshotSchool > 0) return fromSnapshotSchool;
+  return loadSchoolPeriodsPerWeek();
+}
+
+/** Periods per week from General Settings → School settings (always live). */
+export function getSchoolPeriodsPerWeek() {
+  return loadSchoolPeriodsPerWeek() ?? 0;
+}
+
+/** Total lessons/week allotted to a class from General Settings → Class → Lessons (always live). */
+export function getAllottedLessonsPerWeek(classId) {
+  if (!classId) return 0;
+  return getClassLessonStats(classId).periodsTotal;
+}
+
+/** Schedulable slots per class (respects General Settings → periods per week). */
+export function getSlotsPerClass(timetable) {
+  if (!timetable) return 0;
+  const days = timetable.daysPerWeek || 0;
+  const periods = timetable.periodsPerDay || 0;
+  const gridSlots = days * periods;
+  const ppw = resolvePeriodsPerWeek(timetable);
+  if (ppw) return Math.min(ppw, gridSlots);
+  return gridSlots;
+}
+
+/** Count all placed lessons on the grid. */
+export function countPlacedSlotsOnGrid(timetable) {
+  if (!timetable?.cells) return 0;
+  return Object.keys(timetable.cells).length;
+}
+
+/** Count placed lessons for a class, excluding slots outside the weekly cap. */
+export function countPlacedSlotsForClass(timetable, classId) {
+  if (!timetable || !classId) return 0;
+  const periodsPerDay = timetable.periodsPerDay || 0;
+  const ppw = resolvePeriodsPerWeek(timetable);
+  let n = 0;
+  for (const key of Object.keys(timetable.cells || {})) {
+    if (!key.startsWith(`${classId}|`)) continue;
+    const parsed = parseSlotKey(key);
+    if (!parsed) continue;
+    if (ppw && !isSlotWithinPeriodsPerWeek(parsed.day, parsed.period, periodsPerDay, ppw)) {
+      continue;
+    }
+    n++;
+  }
+  return n;
 }
 
 export function buildTeacherOccupancy(timetable, ignoreCardId = null) {
@@ -160,7 +220,13 @@ export function checkTeacherTimeOff(timetable, card, day, period) {
   for (const name of card.teachers) {
     const teacher = teachers.find((t) => t.name === name);
     if (!teacher) continue;
-    const grid = getTeacherTimeOffGrid(teacher, daysPerWeek, periodsPerDay);
+    const periodsPerWeek = resolvePeriodsPerWeek(timetable);
+    const grid = getTeacherTimeOffGrid(
+      teacher,
+      daysPerWeek,
+      periodsPerDay,
+      periodsPerWeek
+    );
     if (!grid[day]?.[period]) {
       unavailable.push(name);
     }
@@ -430,8 +496,13 @@ export function toggleCardFixed(timetable, cardId) {
 export function migrateTimetableFormat(raw) {
   if (!raw) return null;
   if (raw.version === 2 && raw.cells && raw.columns) {
+    const periodsPerWeek =
+      Number(raw.periodsPerWeek) > 0
+        ? Number(raw.periodsPerWeek)
+        : resolvePeriodsPerWeek(raw) ?? (raw.daysPerWeek || 0) * (raw.periodsPerDay || 0);
     return {
       ...raw,
+      periodsPerWeek,
       frozen: Boolean(raw.frozen),
       frozenAt: raw.frozenAt || null,
       snapshot: raw.snapshot || null,
@@ -503,6 +574,10 @@ export function migrateTimetableFormat(raw) {
     academicYear: raw.academicYear || "",
     daysPerWeek,
     periodsPerDay,
+    periodsPerWeek:
+      Number(raw.periodsPerWeek) > 0
+        ? Number(raw.periodsPerWeek)
+        : resolvePeriodsPerWeek(raw) ?? daysPerWeek * periodsPerDay,
     dayLabels,
     dayNames: raw.dayNames || dayLabels,
     periodLabels,
@@ -523,6 +598,7 @@ export function buildInteractiveTimetableFromGeneration({
   classGrids,
   daysPerWeek,
   periodsPerDay,
+  periodsPerWeek,
   dayNames,
   dayLabels,
   periodLabels,
@@ -588,6 +664,7 @@ export function buildInteractiveTimetableFromGeneration({
     academicYear: school?.academicYear || "",
     daysPerWeek,
     periodsPerDay,
+    periodsPerWeek: periodsPerWeek ?? daysPerWeek * periodsPerDay,
     dayNames,
     dayLabels,
     periodLabels,
