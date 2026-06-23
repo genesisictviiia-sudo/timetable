@@ -28,6 +28,45 @@ export default function LoginPage({ onAuthed }) {
     }
   };
 
+  const importDemoData = async () => {
+    setError("");
+    setBusy(true);
+    try {
+      const res = await fetch("/seed.json");
+      if (!res.ok) throw new Error("seed.json not found — run `node scripts/build-seed.mjs`.");
+      const seed = await res.json();
+      const DEMO_EMAIL = "demo@example.com";
+      const DEMO_PASSWORD = "demo1234";
+
+      try {
+        const usersRaw = localStorage.getItem("subst.auth.users");
+        if (usersRaw) {
+          const users = JSON.parse(usersRaw);
+          if (users[DEMO_EMAIL]) {
+            delete users[DEMO_EMAIL];
+            localStorage.setItem("subst.auth.users", JSON.stringify(users));
+          }
+        }
+      } catch {
+        // ignore corrupt users blob
+      }
+
+      const user = await signup({ email: DEMO_EMAIL, password: DEMO_PASSWORD, name: "Demo User" });
+      const scope = (k) => `subst.userData.${DEMO_EMAIL}.${k}`;
+      localStorage.setItem(scope("school"), JSON.stringify(seed.school));
+      localStorage.setItem(scope("classes"), JSON.stringify({ classes: seed.classes }));
+      localStorage.setItem(scope("subjects"), JSON.stringify(seed.subjects));
+      localStorage.setItem(scope("teachers"), JSON.stringify(seed.teachers));
+      localStorage.setItem(scope("classLessons"), JSON.stringify(seed.classLessons));
+
+      onAuthed(user);
+    } catch (err) {
+      setError(err.message || "Could not import demo data.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const isSignup = mode === "signup";
   const isForgot = mode === "forgot";
 
@@ -139,6 +178,20 @@ export default function LoginPage({ onAuthed }) {
             </button>
           </div>
         </form>
+
+        {!isSignup && (
+          <div className="btn-row" style={{ marginTop: "8px" }}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={importDemoData}
+              disabled={busy}
+              title="Loads sample classes, teachers, subjects, and lessons into a demo account."
+            >
+              Import demo data
+            </button>
+          </div>
+        )}
 
         <p className="auth-footnote">
           Accounts are stored locally in your browser. Clearing site data signs you out
