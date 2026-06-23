@@ -1,6 +1,5 @@
 import {
   getClassLessons,
-  getClassTeacherInfo,
   loadClassLessonsMap,
   loadClassesList,
   loadSchoolConstraints,
