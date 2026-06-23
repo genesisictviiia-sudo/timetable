@@ -644,6 +644,11 @@ export default function SubstitutionsPage() {
                     periodIndex: r.period - 1,
                     teacherTimetable,
                     currentSubstitute: sub,
+                    baseByName,
+                    maxWeeklyTotal,
+                    getSubsCount: weekBounds
+                      ? (name) => subsCountForWorkload(name, weekBounds.mondayISO, weekBounds.sundayISO)
+                      : null,
                   });
 
                   return (

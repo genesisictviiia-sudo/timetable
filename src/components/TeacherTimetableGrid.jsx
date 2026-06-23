@@ -105,6 +105,19 @@ export default function TeacherTimetableGrid({
                 const entry = getTeacherCardAt(timetable, teacherName, day, period);
                 const isEmpty = !entry;
 
+                const ppw = timetable.periodsPerWeek;
+                const beyondLimit = ppw > 0 && (day * periodsPerDay + period) >= ppw;
+
+                if (beyondLimit) {
+                  return (
+                    <td
+                      key={gridKey}
+                      className="tt-grid__cell tt-grid__cell--disabled"
+                      aria-disabled="true"
+                    />
+                  );
+                }
+
                 let placeClass = "";
                 if (isDragging && placementPreview) {
                   placeClass = placementPreview[gridKey]

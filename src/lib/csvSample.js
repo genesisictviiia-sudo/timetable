@@ -104,10 +104,29 @@ export const CLASSES_CSV_HEADERS = ["Grade", "Section", "Class title"];
 export const CLASSES_CSV_SAMPLE = ["10", "A", "Grade 10 Section A"];
 
 export const CLASS_LESSONS_CSV_HEADERS = ["Teacher", "Subject", "Lessons per week", "Additional teachers"];
-export const CLASS_LESSONS_CSV_SAMPLE = ["Sample Teacher", "Mathematics", "5", ""];
+export const CLASS_LESSONS_CSV_SAMPLE = ["Teacher A", "Mathematics", "5", "Teacher B/Teacher C"];
+export const CLASS_LESSONS_CSV_SAMPLE2 = ["Teacher D", "Science", "4", ""];
+export const CLASS_LESSONS_CSV_SAMPLE3 = ["Teacher E", "English", "6", "Teacher F/Teacher G"];
 
 export const SUBJECTS_CSV_HEADERS = ["Name", "Shortcut"];
 export const SUBJECTS_CSV_SAMPLE = ["Mathematics", "Math"];
 
-export const TEACHERS_CSV_HEADERS = ["Name", "Phone", "E-mail"];
-export const TEACHERS_CSV_SAMPLE = ["Sample Teacher", "9876543210", "teacher@school.com"];
+export const TEACHERS_CSV_HEADERS = ["Name", "Class teacher", "Lessons"];
+export const TEACHERS_CSV_SAMPLE = ["Sample Teacher", "10A", "Mathematics:10A:5/Science:10B:4"];
+
+/**
+ * Parses a teacher CSV "Lessons" cell into lesson entries.
+ * Format: "Subject:ClassLabel:PeriodsPerWeek" entries separated by "/".
+ * @returns {{subject: string, classLabel: string, periodsPerWeek: number}[]}
+ */
+export function parseTeacherLessonsCell(cell) {
+  if (!cell?.trim()) return [];
+  return cell
+    .split("/")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [subject, classLabel, periodsPerWeek] = entry.split(":").map((p) => p?.trim() ?? "");
+      return { subject, classLabel, periodsPerWeek: Number(periodsPerWeek) };
+    });
+}

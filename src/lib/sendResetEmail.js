@@ -57,15 +57,17 @@ export async function sendPasswordResetEmail(toEmail, resetCode) {
     if (!response.ok) {
       let detail = "";
       try {
-        const body = await response.json();
-        detail = body?.message || body?.error || "";
-      } catch {
-        detail = await response.text().catch(() => "");
+        const text = await response.text();
+        console.error("EmailJS error response:", response.status, text);
+        const body = JSON.parse(text);
+        detail = body?.message || body?.error || text || "";
+      } catch (parseErr) {
+        detail = String(parseErr?.message || "EmailJS returned an error.");
       }
       return {
         delivered: false,
         reason: "send_failed",
-        detail: detail || "Email could not be sent.",
+        detail: detail || `EmailJS HTTP ${response.status}`,
       };
     }
 

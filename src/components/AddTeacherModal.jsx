@@ -2,8 +2,7 @@ import { useState } from "react";
 
 export default function AddTeacherModal({ open, onClose, onSave }) {
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const [classTeacher, setClassTeacher] = useState("");
 
   if (!open) return null;
 
@@ -14,12 +13,10 @@ export default function AddTeacherModal({ open, onClose, onSave }) {
     }
     onSave({
       name: name.trim(),
-      phone: phone.trim(),
-      email: email.trim(),
+      classTeacher: classTeacher.trim(),
     });
     setName("");
-    setPhone("");
-    setEmail("");
+    setClassTeacher("");
     onClose();
   };
 
@@ -32,15 +29,17 @@ export default function AddTeacherModal({ open, onClose, onSave }) {
         <div className="settings-form-compact settings-form-stack">
           <label>
             Name
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Teacher name" />
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Teacher name" autoFocus />
           </label>
           <label>
-            Phone
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" />
-          </label>
-          <label>
-            E-mail
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" />
+            Class teacher of{" "}
+            <span style={{ fontWeight: 400, fontSize: "0.85em", color: "var(--color-text-muted, #888)" }}>(optional)</span>
+            <input
+              type="text"
+              value={classTeacher}
+              onChange={(e) => setClassTeacher(e.target.value)}
+              placeholder="e.g. 10A"
+            />
           </label>
         </div>
         <div className="modal-actions">

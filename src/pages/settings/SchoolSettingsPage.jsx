@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import RowMoveButtons from "../../components/RowMoveButtons";
 import { moveRowAtIndex } from "../../lib/reorderRows";
 import { defaultSchoolConstraints, normalizeSchoolConstraints, loadSchoolStorageRaw, saveSchoolStorageRaw, clearSchoolStorage, SCHOOL_STORAGE_KEY } from "../../lib/settingsStorage";
@@ -46,8 +46,55 @@ function getDuration(startTime, endTime) {
   return `${minutes}m`;
 }
 
+const SAMPLE_CSV = `Name,Type,Start Time,End Time
+Period 1,lesson,08:00,08:45
+Break,break,08:45,09:00
+Period 2,lesson,09:00,09:45
+Period 3,lesson,09:45,10:30
+Break,break,10:30,10:45
+Period 4,lesson,10:45,11:30
+Period 5,lesson,11:30,12:15
+Lunch,break,12:15,13:00
+Period 6,lesson,13:00,13:45
+Period 7,lesson,13:45,14:30
+`;
+
+function downloadSampleCsv() {
+  const blob = new Blob([SAMPLE_CSV], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "periods_sample.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function parsePeriodsCsv(text) {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) throw new Error("CSV must have a header row and at least one data row.");
+  const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+  const nameIdx = header.findIndex((h) => h === "name");
+  const typeIdx = header.findIndex((h) => h === "type");
+  const startIdx = header.findIndex((h) => h.replace(/\s/g, "") === "starttime");
+  const endIdx = header.findIndex((h) => h.replace(/\s/g, "") === "endtime");
+  if ([nameIdx, typeIdx, startIdx, endIdx].some((i) => i === -1))
+    throw new Error("CSV must have columns: Name, Type, Start Time, End Time");
+  return lines.slice(1).map((line, i) => {
+    const cols = line.split(",").map((c) => c.trim());
+    const type = (cols[typeIdx] || "lesson").toLowerCase();
+    return {
+      name: cols[nameIdx] || `Period ${i + 1}`,
+      type: PERIOD_TYPES.includes(type) ? type : "lesson",
+      startTime: cols[startIdx] || "",
+      endTime: cols[endIdx] || "",
+      selected: false,
+    };
+  });
+}
+
 export default function SchoolSettingsPage() {
   const [school, setSchool] = useState(defaultSchool);
+  const csvInputRef = useRef(null);
 
   useEffect(() => {
     const parsed = loadSchoolStorageRaw();
@@ -146,6 +193,22 @@ export default function SchoolSettingsPage() {
       ...prev,
       periods: [...prev.periods, { ...emptyPeriod }],
     }));
+  };
+
+  const handleCsvUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = parsePeriodsCsv(ev.target.result);
+        setSchool((prev) => ({ ...prev, periods: parsed }));
+      } catch (err) {
+        alert(`CSV error: ${err.message}`);
+      }
+    };
+    reader.readAsText(file);
   };
 
   const resetForm = () => {
@@ -308,6 +371,22 @@ export default function SchoolSettingsPage() {
       </div>
 
       <h3 className="settings-subtitle">Setting of periods</h3>
+
+      <div className="settings-action-row settings-action-row--tight" style={{ marginBottom: "0.5rem" }}>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={downloadSampleCsv}>
+          ↓ Download Sample CSV
+        </button>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => csvInputRef.current?.click()}>
+          ↑ Upload CSV
+        </button>
+        <input
+          ref={csvInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          style={{ display: "none" }}
+          onChange={handleCsvUpload}
+        />
+      </div>
 
       <div className="period-table-wrap settings-form-compact">
         <table className="period-table">

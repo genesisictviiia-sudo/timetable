@@ -150,6 +150,9 @@ export function freeTeachersForSlot({
   periodIndex,
   teacherTimetable,
   currentSubstitute,
+  baseByName = {},
+  maxWeeklyTotal = null,
+  getSubsCount = null,  // fn(name) → number of subs already assigned this week
 }) {
   const out = [];
   for (const name of Object.keys(teacherTimetable)) {
@@ -157,7 +160,19 @@ export function freeTeachersForSlot({
     if (excludedTeachers.includes(name) && name !== currentSubstitute) continue;
     const cell = teacherTimetable[name]?.[dayName]?.[periodIndex];
     const free = cell && norm(cell) === "Free";
-    if (free || name === currentSubstitute) out.push(name);
+
+    if (!free && name !== currentSubstitute) continue;
+
+    // Enforce max workload — always allow the current substitute so they remain
+    // selectable (avoids the dropdown losing its current value), but mark them
+    // over-limit in the UI instead of silently hiding them.
+    if (maxWeeklyTotal != null && name !== currentSubstitute && getSubsCount) {
+      const base = baseByName[name] ?? 0;
+      const subs = getSubsCount(name);
+      if (base + subs + 1 > maxWeeklyTotal) continue;
+    }
+
+    out.push(name);
   }
   out.sort((a, b) => a.localeCompare(b));
   return out;

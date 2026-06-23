@@ -100,8 +100,22 @@ export default function TimetableGrid({
               </th>
               {uniquePeriods.map(({ period }) => {
                 const slotKey = makeSlotKey(currentClass.id, day, period);
-                const card = getCellCard(timetable, currentClass.id, day, period);
+                const rawCard = getCellCard(timetable, currentClass.id, day, period);
+                const card = rawCard?.subject ? rawCard : null;
                 const isEmpty = !card;
+
+                const ppw = timetable.periodsPerWeek;
+                const beyondLimit = ppw > 0 && (day * periodsPerDay + period) >= ppw;
+
+                if (beyondLimit) {
+                  return (
+                    <td
+                      key={slotKey}
+                      className="tt-grid__cell tt-grid__cell--disabled"
+                      aria-disabled="true"
+                    />
+                  );
+                }
 
                 let placeClass = "";
                 if (isDragging && placementPreview) {
