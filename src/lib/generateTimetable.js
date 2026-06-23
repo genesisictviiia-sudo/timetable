@@ -69,12 +69,21 @@ function emptyClassGrid(daysPerWeek, periodsPerDay) {
   );
 }
 
-function findClassTeacherForClass(_teachers, cls) {
-  // 1. classId-keyed map — written by saveClassTeacherInfo on every modal Save.
-  //    No fallback to teacher records (avoids stale data from old saves).
-  const info = getClassTeacherInfo(cls.id);
-  if (info.teacherName && info.subject) {
-    return { teacherName: info.teacherName, subject: info.subject };
+function findClassTeacherForClass(teachers, cls) {
+  const classLabel = cls.label;
+  const classTitle = String(cls.title || "").trim() || classLabel;
+
+  for (const t of teachers) {
+    const stored = String(t.classTeacher || "").trim();
+    if (!stored) continue;
+    if (stored !== classTitle && stored !== classLabel) continue;
+    const row =
+      (t.lessons || []).find((l) => l.classLabel === classLabel && l.isClassTeacher) ||
+      (t.lessons || []).find((l) => l.isClassTeacher) ||
+      (t.lessons || []).find((l) => l.classLabel === classLabel);
+    if (row) {
+      return { teacherName: t.name, subject: row.subject };
+    }
   }
 
   // 2. isClassTeacher flag on class lesson rows — set by ClassLessonsModal save payload.
@@ -199,6 +208,16 @@ function createGeneratorState({
       ? null
       : Number(constraints.maxConsecutiveClassesPerDay);
 
+  const totalGridSlots = daysPerWeek * periodsPerDay;
+  const subjectAvailable = {};
+  for (const s of subjects) {
+    subjectAvailable[s.name] = countAvailableSlots(subjectTimeOff[s.name], daysPerWeek, periodsPerDay);
+  }
+  const teacherAvailable = {};
+  for (const t of teachers) {
+    teacherAvailable[t.name] = countAvailableSlots(teacherTimeOff[t.name], daysPerWeek, periodsPerDay);
+  }
+
   return {
     classGrids,
     teacherBusy,
@@ -206,6 +225,9 @@ function createGeneratorState({
     teacherDayPeriods,
     teacherTimeOff,
     subjectTimeOff,
+    teacherAvailable,
+    subjectAvailable,
+    totalGridSlots,
     daysPerWeek,
     periodsPerDay,
     periodsPerWeek,
@@ -219,6 +241,41 @@ function createGeneratorState({
       teacherTimeOff: 0,
     },
   };
+}
+
+function countAvailableSlots(grid, daysPerWeek, periodsPerDay) {
+  if (!grid) return daysPerWeek * periodsPerDay;
+  let n = 0;
+  for (let d = 0; d < daysPerWeek; d++) {
+    for (let p = 0; p < periodsPerDay; p++) {
+      if (grid[d]?.[p]) n++;
+    }
+  }
+  return n;
+}
+
+function lessonAvailabilityScore(task, state) {
+  let minAvail = state.totalGridSlots ?? Infinity;
+  const sAvail = state.subjectAvailable?.[task.subject];
+  if (sAvail != null) minAvail = Math.min(minAvail, sAvail);
+  for (const name of task.teachers) {
+    const tAvail = state.teacherAvailable?.[name];
+    if (tAvail != null) minAvail = Math.min(minAvail, tAvail);
+  }
+  return minAvail;
+}
+
+function isSubjectRestricted(task, state) {
+  const sAvail = state.subjectAvailable?.[task.subject];
+  return sAvail != null && sAvail < (state.totalGridSlots ?? Infinity);
+}
+
+function isTeacherRestricted(task, state) {
+  for (const name of task.teachers) {
+    const tAvail = state.teacherAvailable?.[name];
+    if (tAvail != null && tAvail < (state.totalGridSlots ?? Infinity)) return true;
+  }
+  return false;
 }
 
 function areTeachersFree(task, day, period, state) {
@@ -1072,15 +1129,14 @@ function placeClassTeacherFirstPeriods(instances, state, classes, teachers, days
   }
 }
 
-/**
- * After all configured lessons are placed, fill any remaining empty slots with
- * randomly chosen subjects — skipping the class teacher's own subject.
- */
-
-function sortInstancesForPlacement(instances, attempt = 0) {
+function sortInstancesForPlacement(instances, attempt = 0, state = null) {
   const list = instances
     .filter((t) => !t.invalid && !t.placed && !t.coTeachSatellite)
     .sort((a, b) => {
+      if (state) {
+        const availDiff = lessonAvailabilityScore(a, state) - lessonAvailabilityScore(b, state);
+        if (availDiff !== 0) return availDiff;
+      }
       const teacherDiff = b.teachers.length - a.teachers.length;
       if (teacherDiff !== 0) return teacherDiff;
       return a.classLabel.localeCompare(b.classLabel) || a.subject.localeCompare(b.subject);
