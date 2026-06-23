@@ -97,8 +97,6 @@ export default function TimetablePage() {
     placedOnGrid,
   } = useGenerateTimetable(handleGenerated);
 
-  const anyGenerating = generating;
-
   const teachers = useMemo(() => listTeachersForView(timetable), [timetable]);
   const classes = timetable?.classes ?? [];
   const totalClasses = classes.length;
@@ -124,12 +122,6 @@ export default function TimetablePage() {
     if (!currentClass) return 0;
     return getAllottedLessonsPerWeek(currentClass.id);
   }, [currentClass]);
-
-  // Count lesson cards actually placed on the grid for the current class
-  const placedForClass = useMemo(() => {
-    if (!timetable?.cells || !currentClass) return 0;
-    return Object.keys(timetable.cells).filter(k => k.startsWith(`${currentClass.id}|`)).length;
-  }, [timetable?.cells, currentClass]);
 
   const schoolPeriodsPerWeek = getSchoolPeriodsPerWeek();
 
@@ -273,7 +265,7 @@ export default function TimetablePage() {
             type="button"
             className="btn btn-primary btn--sm"
             onClick={runGenerate}
-            disabled={anyGenerating}
+            disabled={generating}
           >
             {generating ? "Generating…" : "Generate Timetable"}
           </button>
@@ -358,7 +350,7 @@ export default function TimetablePage() {
                   </span>
                   <h3 className="tt-class-header__title">{classTitle}</h3>
                   <span className="tt-class-header__meta">
-                    {placedForClass}/{allottedForClass} lessons placed · {classTrayCards.length} in tray
+                    {allottedForClass}/{schoolPeriodsPerWeek} allotted · {classTrayCards.length} in tray
                   </span>
                   <div className="tt-goto-row">
                     <input
@@ -587,7 +579,6 @@ export default function TimetablePage() {
           placedOnGrid={placedOnGrid}
           generationMeta={generationMeta}
         />
-
       </section>
 
       {printOpen && (

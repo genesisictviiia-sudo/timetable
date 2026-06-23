@@ -110,6 +110,10 @@ export default function ForgotPasswordForm({
       {displayCode && (
         <p className="profile-reset-demo-code" role="status">
           Your reset code: <strong>{displayCode}</strong>
+          <span className="profile-reset-demo-code__hint">
+            {" "}
+            (Configure EmailJS in .env to email codes from {PASSWORD_RESET_FROM_EMAIL}.)
+          </span>
         </p>
       )}
       <label className="auth-field">

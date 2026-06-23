@@ -1,86 +1,208 @@
-import { api, setToken, clearToken, getToken } from "./apiClient";
-import { initUserDataCache, clearUserDataCache } from "./userDataStorage";
 import { sendPasswordResetEmail } from "./sendResetEmail";
+import { onUserSessionStarted } from "./userDataStorage";
 
-// In-memory current user — set on login/restore, cleared on logout.
-let _currentUser = null;
+const USERS_KEY = "subst.auth.users";
+const SESSION_KEY = "subst.auth.session";
+const RESET_KEY = "subst.auth.resetCodes";
+const RESET_TTL_MS = 15 * 60 * 1000;
 
-export function getCurrentUser() {
-  return _currentUser;
-}
-
-/**
- * Attempt to restore an existing session from the stored JWT.
- * Returns the user object if valid, null otherwise.
- * Must be awaited before rendering the authenticated app.
- */
-export async function restoreSession() {
-  if (!getToken()) return null;
+function readJson(key, fallback) {
   try {
-    const user = await api.get("/auth/me");
-    _currentUser = user;
-    // Separate data-load errors from auth errors — a failing /api/data call
-    // should not log the user out.
-    await initUserDataCache(user.email).catch(console.error);
-    return user;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
   } catch {
-    clearToken();
-    return null;
+    return fallback;
   }
 }
 
+function writeJson(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+async function hashPassword(password, salt) {
+  const enc = new TextEncoder();
+  const data = enc.encode(`${salt}::${password}`);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function randomSalt() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+export function getAllUsers() {
+  return readJson(USERS_KEY, {});
+}
+
+export function getSession() {
+  return readJson(SESSION_KEY, null);
+}
+
+export function getCurrentUser() {
+  const session = getSession();
+  if (!session?.email) return null;
+  const users = getAllUsers();
+  const record = users[session.email];
+  if (!record) return null;
+  return { email: session.email, profile: record.profile || {} };
+}
+
 export async function signup({ email, password, name }) {
-  const { token, user } = await api.post("/auth/signup", { email, password, name });
-  setToken(token);
-  _currentUser = user;
-  await initUserDataCache(user.email).catch(console.error);
-  return user;
+  const normalized = normalizeEmail(email);
+  if (!normalized) throw new Error("Email is required.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw new Error("Please enter a valid email address.");
+  }
+  if (!password || password.length < 6) {
+    throw new Error("Password must be at least 6 characters.");
+  }
+  const users = getAllUsers();
+  if (users[normalized]) throw new Error("An account with this email already exists.");
+  const salt = randomSalt();
+  const hash = await hashPassword(password, salt);
+  users[normalized] = {
+    salt,
+    hash,
+    profile: {
+      name: name?.trim() || "",
+      role: "",
+      school: "",
+      createdAt: new Date().toISOString(),
+    },
+  };
+  writeJson(USERS_KEY, users);
+  writeJson(SESSION_KEY, { email: normalized, startedAt: Date.now() });
+  onUserSessionStarted(normalized, { isNewAccount: true });
+  return { email: normalized, profile: users[normalized].profile };
 }
 
 export async function login({ email, password }) {
-  const { token, user } = await api.post("/auth/login", { email, password });
-  setToken(token);
-  _currentUser = user;
-  await initUserDataCache(user.email).catch(console.error);
-  return user;
+  const normalized = normalizeEmail(email);
+  const users = getAllUsers();
+  const record = users[normalized];
+  if (!record) throw new Error("No account found with that email.");
+  const hash = await hashPassword(password, record.salt);
+  if (hash !== record.hash) throw new Error("Incorrect password.");
+  writeJson(SESSION_KEY, { email: normalized, startedAt: Date.now() });
+  onUserSessionStarted(normalized, { isNewAccount: false });
+  return { email: normalized, profile: record.profile };
 }
 
 export function logout() {
-  clearToken();
-  _currentUser = null;
-  clearUserDataCache();
+  localStorage.removeItem(SESSION_KEY);
 }
 
-export async function updateProfile(patch) {
-  const user = await api.patch("/auth/profile", patch);
-  _currentUser = user;
-  return user;
-}
-
-export async function changePassword({ currentPassword, newPassword }) {
-  await api.post("/auth/change-password", { currentPassword, newPassword });
+export function updateProfile(patch) {
+  const session = getSession();
+  if (!session?.email) throw new Error("Not signed in.");
+  const users = getAllUsers();
+  const record = users[session.email];
+  if (!record) throw new Error("Account no longer exists.");
+  record.profile = { ...record.profile, ...patch };
+  writeJson(USERS_KEY, users);
+  return { email: session.email, profile: record.profile };
 }
 
 export async function setPasswordForCurrentUser({ newPassword }) {
-  await api.post("/auth/set-password", { newPassword });
+  const session = getSession();
+  if (!session?.email) throw new Error("Not signed in.");
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error("New password must be at least 6 characters.");
+  }
+  const users = getAllUsers();
+  const record = users[session.email];
+  if (!record) throw new Error("Account no longer exists.");
+  const salt = randomSalt();
+  record.salt = salt;
+  record.hash = await hashPassword(newPassword, salt);
+  writeJson(USERS_KEY, users);
 }
 
+export async function changePassword({ currentPassword, newPassword }) {
+  const session = getSession();
+  if (!session?.email) throw new Error("Not signed in.");
+  const users = getAllUsers();
+  const record = users[session.email];
+  if (!record) throw new Error("Account no longer exists.");
+  const currentHash = await hashPassword(currentPassword, record.salt);
+  if (currentHash !== record.hash) throw new Error("Current password is incorrect.");
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error("New password must be at least 6 characters.");
+  }
+  const salt = randomSalt();
+  record.salt = salt;
+  record.hash = await hashPassword(newPassword, salt);
+  writeJson(USERS_KEY, users);
+}
+
+function generateResetCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+/**
+ * Request a password reset code and email it to the user.
+ * From: admin.campusscheduler@gmail.com (via EmailJS) → To: entered email.
+ */
 export async function requestPasswordReset(email) {
-  // Backend generates + stores the code; we receive it here to send via EmailJS.
-  const result = await api.post("/auth/request-reset", { email });
-  const mailResult = await sendPasswordResetEmail(result.email, result.code);
+  const normalized = normalizeEmail(email);
+  if (!normalized) throw new Error("Email is required.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw new Error("Please enter a valid email address.");
+  }
+  const users = getAllUsers();
+  if (!users[normalized]) throw new Error("No account found with that email.");
+
+  const code = generateResetCode();
+  const resets = readJson(RESET_KEY, {});
+  resets[normalized] = { code, expiresAt: Date.now() + RESET_TTL_MS };
+  writeJson(RESET_KEY, resets);
+
+  const mailResult = await sendPasswordResetEmail(normalized, code);
+
   return {
-    email: result.email,
-    code: result.code,
+    email: normalized,
+    code,
     emailDelivered: mailResult.delivered,
     emailError: mailResult.detail || null,
   };
 }
 
 export async function resetPasswordWithCode({ email, code, newPassword }) {
-  await api.post("/auth/reset-password", { email, code, newPassword });
-}
+  const normalized = normalizeEmail(email);
+  const trimmedCode = String(code || "").trim();
+  if (!trimmedCode) throw new Error("Reset code is required.");
+  if (!newPassword || newPassword.length < 6) {
+    throw new Error("New password must be at least 6 characters.");
+  }
 
-// Kept for compatibility — not used with API-backed auth.
-export function getAllUsers() { return {}; }
-export function getSession() { return null; }
+  const resets = readJson(RESET_KEY, {});
+  const entry = resets[normalized];
+  if (!entry) throw new Error("No reset request found. Send a new code.");
+  if (Date.now() > entry.expiresAt) {
+    delete resets[normalized];
+    writeJson(RESET_KEY, resets);
+    throw new Error("Reset code has expired. Request a new one.");
+  }
+  if (entry.code !== trimmedCode) throw new Error("Invalid reset code.");
+
+  const users = getAllUsers();
+  const record = users[normalized];
+  if (!record) throw new Error("Account no longer exists.");
+
+  const salt = randomSalt();
+  record.salt = salt;
+  record.hash = await hashPassword(newPassword, salt);
+  writeJson(USERS_KEY, users);
+  delete resets[normalized];
+  writeJson(RESET_KEY, resets);
+}

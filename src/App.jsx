@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import HomePage from "./pages/HomePage";
 import TimetablePage from "./pages/TimetablePage";
 import SubstitutionsPage from "./pages/SubstitutionsPage";
@@ -6,7 +6,8 @@ import GeneralSettingsPage from "./pages/GeneralSettingsPage";
 import LoginPage from "./pages/LoginPage";
 import UserAvatar from "./components/UserAvatar";
 import ProfileSettingsModal from "./components/ProfileSettingsModal";
-import { getCurrentUser, logout, restoreSession } from "./lib/authStorage";
+import { getCurrentUser, logout } from "./lib/authStorage";
+import { onUserSessionStarted } from "./lib/userDataStorage";
 import "./App.css";
 
 const NAV_ITEMS = [
@@ -18,28 +19,14 @@ const NAV_ITEMS = [
 
 function App() {
   const [activeTab, setActiveTab] = useState("home");
-  const [user, setUser] = useState(null);
-  const [appReady, setAppReady] = useState(false);
+  const [user, setUser] = useState(() => {
+    const current = getCurrentUser();
+    if (current?.email) {
+      onUserSessionStarted(current.email, { isNewAccount: false });
+    }
+    return current;
+  });
   const [profileOpen, setProfileOpen] = useState(false);
-
-  useEffect(() => {
-    restoreSession()
-      .then((restored) => setUser(restored))
-      .finally(() => setAppReady(true));
-  }, []);
-
-  if (!appReady) {
-    return (
-      <div className="app">
-        <header className="top-bar">
-          <h1 className="top-bar-title">Campus Schedule Planner</h1>
-        </header>
-        <main className="app-main" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <p>Loading…</p>
-        </main>
-      </div>
-    );
-  }
 
   if (!user) {
     return (

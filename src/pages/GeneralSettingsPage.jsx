@@ -4,24 +4,22 @@ import SchoolSettingsPage from "./settings/SchoolSettingsPage";
 import ClassesSettingsPage from "./settings/ClassesSettingsPage";
 import SubjectsSettingsPage from "./settings/SubjectsSettingsPage";
 import TeachersSettingsPage from "./settings/TeachersSettingsPage";
+const MENU_ITEMS = [
+  { id: "school", label: "School settings", Component: SchoolSettingsPage },
+  { id: "classes", label: "Classes", Component: ClassesSettingsPage },
+  { id: "subjects", label: "Subjects", Component: SubjectsSettingsPage },
+  { id: "teachers", label: "Teachers", Component: TeachersSettingsPage },
+];
 
 export default function GeneralSettingsPage() {
   const [activeId, setActiveId] = useState("school");
-  // Bumped whenever class lessons are saved so TeachersSettingsPage remounts
-  // and reloads the updated class-teacher assignments.
-  const [teachersRevision, setTeachersRevision] = useState(0);
-
-  const onClassLessonsSaved = () => setTeachersRevision((v) => v + 1);
+  const active = MENU_ITEMS.find((m) => m.id === activeId) ?? MENU_ITEMS[0];
+  const Panel = active.Component;
 
   return (
     <div className="settings-layout">
       <aside className="settings-left-panel">
-        {[
-          { id: "school",   label: "School settings" },
-          { id: "classes",  label: "Classes" },
-          { id: "subjects", label: "Subjects" },
-          { id: "teachers", label: "Teachers" },
-        ].map((item) => (
+        {MENU_ITEMS.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -34,10 +32,7 @@ export default function GeneralSettingsPage() {
       </aside>
 
       <main className="settings-right-panel">
-        {activeId === "school"   && <SchoolSettingsPage />}
-        {activeId === "classes"  && <ClassesSettingsPage onClassLessonsSaved={onClassLessonsSaved} />}
-        {activeId === "subjects" && <SubjectsSettingsPage />}
-        {activeId === "teachers" && <TeachersSettingsPage key={teachersRevision} />}
+        <Panel />
       </main>
     </div>
   );

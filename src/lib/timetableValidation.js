@@ -524,9 +524,6 @@ export function migrateTimetableFormat(raw) {
       Number(raw.periodsPerWeek) > 0
         ? Number(raw.periodsPerWeek)
         : resolvePeriodsPerWeek(raw) ?? (raw.daysPerWeek || 0) * (raw.periodsPerDay || 0);
-    const daysPerWeek = raw.daysPerWeek || 0;
-    const periodsPerDay = raw.periodsPerDay || 1;
-    const ppwCap = periodsPerWeek > 0 ? periodsPerWeek : daysPerWeek * periodsPerDay;
     return {
       ...raw,
       periodsPerWeek,
@@ -534,17 +531,7 @@ export function migrateTimetableFormat(raw) {
       frozenAt: raw.frozenAt || null,
       snapshot: raw.snapshot || null,
       cells: Object.fromEntries(
-        Object.entries(raw.cells)
-          .map(([k, v]) => {
-            const card = normalizeCard(v);
-            // Strip filler cards (no teachers) and slots beyond periodsPerWeek cap
-            if (!card || card.teachers.length === 0) return null;
-            if (ppwCap > 0 && card.day != null && card.period != null) {
-              if (card.day * periodsPerDay + card.period >= ppwCap) return null;
-            }
-            return [k, card];
-          })
-          .filter(Boolean)
+        Object.entries(raw.cells).map(([k, v]) => [k, normalizeCard(v)])
       ),
       tray: (raw.tray || []).map((c) => normalizeCard(c)).filter(Boolean),
     };
@@ -656,48 +643,42 @@ export function buildInteractiveTimetableFromGeneration({
   const cells = {};
   const grid = classGrids || {};
 
-  const ppwCap = Number(periodsPerWeek) > 0 ? Number(periodsPerWeek) : daysPerWeek * periodsPerDay;
-
   for (const cls of classRows) {
     const classGrid = grid[cls.id];
     if (!classGrid) continue;
     for (let day = 0; day < daysPerWeek; day++) {
       for (let period = 0; period < periodsPerDay; period++) {
-        // Skip slots beyond the school's periods-per-week cap
-        if (day * periodsPerDay + period >= ppwCap) continue;
         const slot = classGrid[day]?.[period];
-        // Skip filler cells (no real lesson configured)
-        if (!slot || slot.isFiller) continue;
-        cells[makeSlotKey(cls.id, day, period)] = {
-          ...normalizeCard({
-            id: createCardId(),
-            classId: cls.id,
-            classLabel: cls.label,
-            subject: slot.subject,
-            teachers: slot.teachers || [],
-            fixed: false,
-            day,
-            period,
-            lessonId: slot.lessonId,
-          }),
-          ...(slot.isFiller ? { isFiller: true } : {}),
-        };
+        if (!slot) continue;
+        cells[makeSlotKey(cls.id, day, period)] = normalizeCard({
+          id: createCardId(),
+          classId: cls.id,
+          classLabel: cls.label,
+          subject: slot.subject,
+          teachers: slot.teachers || [],
+          fixed: false,
+          day,
+          period,
+          lessonId: slot.lessonId,
+        });
       }
     }
   }
 
-  const tray = (unassigned || []).map((u) => {
-    const cls = classRows.find((c) => c.id === u.classId) ||
-      classRows.find((c) => c.label === u.classLabel);
-    return normalizeCard({
-      id: createCardId(),
-      classId: cls?.id ?? u.classId ?? "",
-      classLabel: cls?.label ?? u.classLabel ?? "",
-      subject: u.subject,
-      teachers: u.teachers || [],
-      fixed: false,
-    });
-  });
+  const tray = (unassigned || [])
+    .map((u) => {
+      const cls = classRows.find((c) => c.label === u.classLabel);
+      if (!cls) return null;
+      return normalizeCard({
+        id: createCardId(),
+        classId: cls.id,
+        classLabel: u.classLabel,
+        subject: u.subject,
+        teachers: u.teachers || [],
+        fixed: false,
+      });
+    })
+    .filter(Boolean);
 
   return {
     version: 2,

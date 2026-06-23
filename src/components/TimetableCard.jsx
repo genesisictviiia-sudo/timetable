@@ -18,12 +18,10 @@ export default function TimetableCard({
   const teachers = Array.isArray(card.teachers) ? card.teachers : [];
   const fixed = Boolean(card.fixed);
 
-  const isFiller = Boolean(card.isFiller);
-
   return (
     <div
-      className={`tt-card${fixed ? " tt-card--fixed" : ""}${compact ? " tt-card--compact" : ""}${dense ? " tt-card--dense" : ""}${isFiller ? " tt-card--filler" : ""}`}
-      draggable={draggable && !fixed && !isFiller}
+      className={`tt-card${fixed ? " tt-card--fixed" : ""}${compact ? " tt-card--compact" : ""}${dense ? " tt-card--dense" : ""}`}
+      draggable={draggable && !fixed}
       onDragStart={(e) => {
         if (fixed) {
           e.preventDefault();

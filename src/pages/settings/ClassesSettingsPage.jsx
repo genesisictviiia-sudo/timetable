@@ -23,11 +23,10 @@ function newRow() {
   };
 }
 
-export default function ClassesSettingsPage({ onClassLessonsSaved }) {
+export default function ClassesSettingsPage() {
   const [rows, setRows] = useState([newRow()]);
   const [lessonsForClassId, setLessonsForClassId] = useState(null);
   const [lessonsRevision, setLessonsRevision] = useState(0);
-  const [search, setSearch] = useState("");
 
   const lessonStatsByClassId = useMemo(() => {
     const stats = {};
@@ -71,23 +70,12 @@ export default function ClassesSettingsPage({ onClassLessonsSaved }) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, selected: !r.selected } : r)));
   };
 
-  const q = search.trim().toLowerCase();
-  const visibleRows = q
-    ? rows.filter(
-        (r) =>
-          String(r.grade).toLowerCase().includes(q) ||
-          String(r.section).toLowerCase().includes(q) ||
-          String(r.title).toLowerCase().includes(q)
-      )
-    : rows;
-
-  const allChecked = visibleRows.length > 0 && visibleRows.every((r) => r.selected);
-  const someChecked = visibleRows.some((r) => r.selected);
+  const allChecked = rows.length > 0 && rows.every((r) => r.selected);
+  const someChecked = rows.some((r) => r.selected);
 
   const toggleSelectAll = () => {
     const next = !allChecked;
-    const visibleIds = new Set(visibleRows.map((r) => r.id));
-    setRows((prev) => prev.map((r) => (visibleIds.has(r.id) ? { ...r, selected: next } : r)));
+    setRows((prev) => prev.map((r) => ({ ...r, selected: next })));
   };
 
   const moveRow = (id, direction) => {
@@ -201,17 +189,6 @@ export default function ClassesSettingsPage({ onClassLessonsSaved }) {
       </p>
       <CsvSampleButtons onDownload={downloadClassesSample} onUploadFile={uploadClassesSample} />
 
-      <div style={{ marginBottom: "8px" }}>
-        <input
-          type="search"
-          className="field-input search-input"
-          placeholder="Search by grade, section or title…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search classes"
-        />
-      </div>
-
       <div className="period-table-wrap classes-table-scroll settings-form-compact">
         <table className="period-table classes-table">
           <thead>
@@ -237,16 +214,7 @@ export default function ClassesSettingsPage({ onClassLessonsSaved }) {
             </tr>
           </thead>
           <tbody>
-            {visibleRows.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="teacher-list-empty">
-                  {rows.length === 0
-                    ? "No classes yet. Add a row or upload a CSV."
-                    : `No classes match "${search}".`}
-                </td>
-              </tr>
-            ) : null}
-            {visibleRows.map((row, index) => {
+            {rows.map((row, index) => {
               const { lessonCount, periodsTotal } = lessonStatsByClassId[row.id] ?? {
                 lessonCount: 0,
                 periodsTotal: 0,
@@ -340,7 +308,6 @@ export default function ClassesSettingsPage({ onClassLessonsSaved }) {
           setLessonsForClassId(null);
           setLessonsRevision((v) => v + 1);
         }}
-        onSaved={onClassLessonsSaved}
       />
     </section>
   );

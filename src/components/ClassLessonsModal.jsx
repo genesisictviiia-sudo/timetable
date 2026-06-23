@@ -1,19 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   getClassLessons,
-  getClassTeacherNameForClass,
-  getClassTeacherSubjectForClass,
   loadSchoolPeriodsPerWeek,
   loadSubjects,
   loadTeachers,
   saveClassLessonsForClass,
-  saveClassTeacherForClass,
 } from "../lib/settingsStorage";
 import {
   CLASS_LESSONS_CSV_HEADERS,
   CLASS_LESSONS_CSV_SAMPLE,
-  CLASS_LESSONS_CSV_SAMPLE2,
-  CLASS_LESSONS_CSV_SAMPLE3,
   downloadCsvFile,
   parseCsv,
   validateCsvFormat,
@@ -44,24 +39,20 @@ function sumLessonsPerWeek(lessonRows) {
 function parseAdditionalTeachers(cell) {
   if (!cell?.trim()) return [];
   return cell
-    .split("/")
+    .split(/[;|]/)
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
-export default function ClassLessonsModal({ open, classRow, onClose, onSaved }) {
+export default function ClassLessonsModal({ open, classRow, onClose }) {
   const [teacherNames, setTeacherNames] = useState([]);
   const [subjectNames, setSubjectNames] = useState([]);
   const [lessons, setLessons] = useState([newLessonRow()]);
   const [moreTeachersFor, setMoreTeachersFor] = useState(null);
   const [schoolMaxPerWeek, setSchoolMaxPerWeek] = useState(null);
-  const [classTeacherName,    setClassTeacherName]    = useState("");
-  const [classTeacherSubject, setClassTeacherSubject] = useState("");
-  const [lessonSearch, setLessonSearch] = useState("");
 
   useEffect(() => {
     if (!open || !classRow) return;
-    setLessonSearch("");
 
     const teachers = loadTeachers();
     if (!teachers.length) {
@@ -80,42 +71,17 @@ export default function ClassLessonsModal({ open, classRow, onClose, onSaved }) 
     setTeacherNames(teachers.map((t) => t.name));
     setSubjectNames(subjects.map((s) => s.name));
     setSchoolMaxPerWeek(loadSchoolPeriodsPerWeek());
-    // classLabel computed below after open/classRow guard — read it from classRow directly here
-    const lbl = (
-      [classRow.grade, classRow.section].map((s) => String(s || "").trim()).filter(Boolean).join("") ||
-      String(classRow.title || "").trim() ||
-      String(classRow.label || "").trim()
-    );
+
     const saved = getClassLessons(classRow.id);
-
-    // Load class teacher name + subject.
-    // Priority: classId-keyed map → isClassTeacher flag on lesson row → fallback scan.
-    const ctLesson  = saved.find(l => l.isClassTeacher);
-    let ctName    = getClassTeacherNameForClass(lbl, classRow.id) || ctLesson?.primaryTeacher?.trim() || "";
-    let ctSubject = getClassTeacherSubjectForClass(lbl, classRow.id) || ctLesson?.subject?.trim() || "";
-
-    // If subject still empty but name is known: auto-fill when the teacher teaches
-    // exactly one subject in this class (unambiguous derivation from lesson rows).
-    if (!ctSubject && ctName && saved.length) {
-      const opts = [...new Set(
-        saved.filter(l => l.primaryTeacher === ctName && l.subject).map(l => l.subject)
-      )];
-      if (opts.length === 1) ctSubject = opts[0];
-    }
-
-    setClassTeacherName(ctName);
-    setClassTeacherSubject(ctSubject);
-
     if (saved.length) {
       setLessons(
         saved.map((item, i) => ({
           id: item.id || `lesson-${i}`,
-          primaryTeacher:     item.primaryTeacher ?? "",
+          primaryTeacher: item.primaryTeacher ?? "",
           additionalTeachers: Array.isArray(item.additionalTeachers) ? item.additionalTeachers : [],
-          subject:            item.subject ?? "",
-          lessonsPerWeek:     item.lessonsPerWeek ?? "",
-          isClassTeacher:     Boolean(item.isClassTeacher),
-          selected:           false,
+          subject: item.subject ?? "",
+          lessonsPerWeek: item.lessonsPerWeek ?? "",
+          selected: false,
         }))
       );
     } else {
@@ -129,26 +95,7 @@ export default function ClassLessonsModal({ open, classRow, onClose, onSaved }) 
 
   if (!open || !classRow) return null;
 
-  const lq = lessonSearch.trim().toLowerCase();
-  const visibleLessons = lq
-    ? lessons.filter(
-        (l) =>
-          l.primaryTeacher.toLowerCase().includes(lq) ||
-          l.subject.toLowerCase().includes(lq) ||
-          l.additionalTeachers.some((n) => n.toLowerCase().includes(lq))
-      )
-    : lessons;
-
   const headingTitle = String(classRow.title || "").trim() || "Untitled class";
-  // Compute class label the same way loadClassesList() does: grade+section, fallback to title.
-  const classLabel = (
-    [classRow.grade, classRow.section]
-      .map((s) => String(s || "").trim())
-      .filter(Boolean)
-      .join("") ||
-    String(classRow.title || "").trim() ||
-    String(classRow.label || "").trim()
-  );
 
   const checkTotalWithinLimit = (total, context) => {
     if (schoolMaxPerWeek == null) {
@@ -207,19 +154,7 @@ export default function ClassLessonsModal({ open, classRow, onClose, onSaved }) 
   };
 
   const downloadLessonsSample = () => {
-    const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const header = CLASS_LESSONS_CSV_HEADERS.map(escape).join(",");
-    const row1 = CLASS_LESSONS_CSV_SAMPLE.map(escape).join(",");
-    const row2 = CLASS_LESSONS_CSV_SAMPLE2.map(escape).join(",");
-    const row3 = CLASS_LESSONS_CSV_SAMPLE3.map(escape).join(",");
-    const csv = "﻿" + [header, row1, row2, row3].join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "class-lessons-sample.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvFile("class-lessons-sample.csv", CLASS_LESSONS_CSV_HEADERS, CLASS_LESSONS_CSV_SAMPLE);
   };
 
   const uploadLessonsSample = (file) => {
@@ -300,32 +235,15 @@ export default function ClassLessonsModal({ open, classRow, onClose, onSaved }) 
 
     if (!checkTotalWithinLimit(totalPerWeek, "saving lessons")) return;
 
-    // Mark exactly ONE lesson row as the class-teacher lesson (the first match).
-    // All other rows get isClassTeacher: false so old flags are cleared.
-    let ctFlagged = false;
-    const payload = lessons.map((l) => {
-      const isMatch =
-        Boolean(classTeacherName && classTeacherSubject &&
-          l.primaryTeacher === classTeacherName &&
-          l.subject         === classTeacherSubject);
-      const flag = isMatch && !ctFlagged;
-      if (flag) ctFlagged = true;
-      return {
-        id: l.id,
-        primaryTeacher:     l.primaryTeacher,
-        additionalTeachers: l.additionalTeachers,
-        subject:            l.subject,
-        lessonsPerWeek:     Number(l.lessonsPerWeek),
-        isClassTeacher:     flag,
-      };
-    });
+    const payload = lessons.map((l) => ({
+      id: l.id,
+      primaryTeacher: l.primaryTeacher,
+      additionalTeachers: l.additionalTeachers,
+      subject: l.subject,
+      lessonsPerWeek: Number(l.lessonsPerWeek),
+    }));
 
-    // 1. Save class lessons (also triggers syncTeacherLessonsFromClassLessons).
     saveClassLessonsForClass(classRow.id, payload);
-    // 2. Final authoritative write: explicitly set the class teacher + subject on the
-    //    teacher record AFTER the sync, so this is always the last word.
-    saveClassTeacherForClass(classLabel, classTeacherName, classTeacherSubject, classRow.id);
-    onSaved?.();
     alert(`Lessons saved for ${headingTitle}. Teacher lessons were updated from class lessons.`);
     onClose();
   };
@@ -347,65 +265,6 @@ export default function ClassLessonsModal({ open, classRow, onClose, onSaved }) 
 
           <CsvSampleButtons onDownload={downloadLessonsSample} onUploadFile={uploadLessonsSample} />
 
-          <div className="field-row" style={{ marginBottom: "10px", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            <label className="field-label" htmlFor="class-teacher-select" style={{ whiteSpace: "nowrap" }}>
-              Class Teacher
-            </label>
-            <select
-              id="class-teacher-select"
-              className="field-input"
-              value={classTeacherName}
-              onChange={(e) => {
-                setClassTeacherName(e.target.value);
-                setClassTeacherSubject(""); // reset subject when teacher changes
-              }}
-            >
-              <option value="">— none —</option>
-              {[...new Set(lessons.map((l) => l.primaryTeacher).filter(Boolean))].sort().map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-
-            <label className="field-label" htmlFor="class-teacher-subject-select" style={{ whiteSpace: "nowrap" }}>
-              Subject
-            </label>
-            <select
-              id="class-teacher-subject-select"
-              className="field-input"
-              value={classTeacherSubject}
-              disabled={!classTeacherName}
-              onChange={(e) => setClassTeacherSubject(e.target.value)}
-            >
-              <option value="">— select subject —</option>
-              {[...new Set(
-                lessons
-                  .filter(l => l.primaryTeacher === classTeacherName && l.subject)
-                  .map(l => l.subject)
-              )].sort().map((subj) => (
-                <option key={subj} value={subj}>{subj}</option>
-              ))}
-            </select>
-
-            <span className="field-hint">
-              {classTeacherName && classTeacherSubject
-                ? `${classTeacherName} (${classTeacherSubject}) → P1 every day`
-                : classTeacherName
-                  ? "Select the subject this class teacher teaches"
-                  : "No class teacher assigned"}
-            </span>
-          </div>
-
-          <div style={{ marginBottom: "8px" }}>
-            <input
-              type="search"
-              className="field-input search-input"
-              placeholder="Search by teacher or subject…"
-              value={lessonSearch}
-              onChange={(e) => setLessonSearch(e.target.value)}
-              aria-label="Search lessons"
-            />
-          </div>
-
           <div className="period-table-wrap settings-form-compact">
             <table className="period-table">
               <thead>
@@ -421,16 +280,7 @@ export default function ClassLessonsModal({ open, classRow, onClose, onSaved }) 
                 </tr>
               </thead>
               <tbody>
-                {visibleLessons.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="teacher-list-empty">
-                      {lessons.length === 0
-                        ? "No lessons yet. Add a row below."
-                        : `No lessons match "${lessonSearch}".`}
-                    </td>
-                  </tr>
-                )}
-                {visibleLessons.map((lesson, index) => (
+                {lessons.map((lesson, index) => (
                   <tr key={lesson.id}>
                     <td>
                       <input type="checkbox" checked={lesson.selected} onChange={() => toggleSelected(lesson.id)} />

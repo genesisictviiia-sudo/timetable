@@ -6,7 +6,7 @@ import {
 } from "../lib/generateTimetable";
 import { countPlacedSlotsOnGrid } from "../lib/timetableValidation";
 import { freezeTimetable } from "../lib/timetableSnapshot";
-import { clearGeneratedTimetable, loadGeneratedTimetable, saveGeneratedTimetable } from "../lib/timetableStorage";
+import { loadGeneratedTimetable, saveGeneratedTimetable } from "../lib/timetableStorage";
 
 function formatRelaxationSummary(relaxations) {
   if (!relaxations) return null;
@@ -40,11 +40,6 @@ export function useGenerateTimetable(onGenerated) {
     ) {
       return;
     }
-
-    // Clear existing timetable before starting a fresh generation
-    clearGeneratedTimetable();
-    setLastResult(null);
-    onGenerated?.(null);
 
     setGenerating(true);
     setGenerationProgress({ attempt: 0, maxAttempts: GENERATION_ATTEMPTS, bestTrayCount: null });

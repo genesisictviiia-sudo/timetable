@@ -2,7 +2,8 @@ import { useState } from "react";
 
 export default function AddTeacherModal({ open, onClose, onSave }) {
   const [name, setName] = useState("");
-  const [classTeacher, setClassTeacher] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
 
   if (!open) return null;
 
@@ -13,10 +14,12 @@ export default function AddTeacherModal({ open, onClose, onSave }) {
     }
     onSave({
       name: name.trim(),
-      classTeacher: classTeacher.trim(),
+      phone: phone.trim(),
+      email: email.trim(),
     });
     setName("");
-    setClassTeacher("");
+    setPhone("");
+    setEmail("");
     onClose();
   };
 
@@ -29,17 +32,15 @@ export default function AddTeacherModal({ open, onClose, onSave }) {
         <div className="settings-form-compact settings-form-stack">
           <label>
             Name
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Teacher name" autoFocus />
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Teacher name" />
           </label>
           <label>
-            Class teacher of{" "}
-            <span style={{ fontWeight: 400, fontSize: "0.85em", color: "var(--color-text-muted, #888)" }}>(optional)</span>
-            <input
-              type="text"
-              value={classTeacher}
-              onChange={(e) => setClassTeacher(e.target.value)}
-              placeholder="e.g. 10A"
-            />
+            Phone
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" />
+          </label>
+          <label>
+            E-mail
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" />
           </label>
         </div>
         <div className="modal-actions">

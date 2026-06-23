@@ -1942,19 +1942,6 @@ td.warn {
   pointer-events: none;
 }
 
-.tt-grid__cell--disabled {
-  background: #f1f5f9;
-  background-image: repeating-linear-gradient(
-    135deg,
-    transparent,
-    transparent 4px,
-    #e2e8f0 4px,
-    #e2e8f0 5px
-  );
-  pointer-events: none;
-  cursor: not-allowed;
-}
-
 .tt-grid__blocked-slot {
   display: block;
   text-align: center;
