@@ -77,8 +77,9 @@ function findClassTeacherForClass(teachers, cls) {
     if (!stored) continue;
     if (stored !== classTitle && stored !== classLabel) continue;
     const row =
-      (t.lessons || []).find((l) => l.classLabel === classLabel) ||
-      (t.lessons || []).find((l) => l.isClassTeacher);
+      (t.lessons || []).find((l) => l.classLabel === classLabel && l.isClassTeacher) ||
+      (t.lessons || []).find((l) => l.isClassTeacher) ||
+      (t.lessons || []).find((l) => l.classLabel === classLabel);
     if (row) {
       return { teacherName: t.name, subject: row.subject };
     }
@@ -205,6 +206,16 @@ function createGeneratorState({
       ? null
       : Number(constraints.maxConsecutiveClassesPerDay);
 
+  const totalGridSlots = daysPerWeek * periodsPerDay;
+  const subjectAvailable = {};
+  for (const s of subjects) {
+    subjectAvailable[s.name] = countAvailableSlots(subjectTimeOff[s.name], daysPerWeek, periodsPerDay);
+  }
+  const teacherAvailable = {};
+  for (const t of teachers) {
+    teacherAvailable[t.name] = countAvailableSlots(teacherTimeOff[t.name], daysPerWeek, periodsPerDay);
+  }
+
   return {
     classGrids,
     teacherBusy,
@@ -212,6 +223,9 @@ function createGeneratorState({
     teacherDayPeriods,
     teacherTimeOff,
     subjectTimeOff,
+    teacherAvailable,
+    subjectAvailable,
+    totalGridSlots,
     daysPerWeek,
     periodsPerDay,
     periodsPerWeek,
@@ -225,6 +239,41 @@ function createGeneratorState({
       teacherTimeOff: 0,
     },
   };
+}
+
+function countAvailableSlots(grid, daysPerWeek, periodsPerDay) {
+  if (!grid) return daysPerWeek * periodsPerDay;
+  let n = 0;
+  for (let d = 0; d < daysPerWeek; d++) {
+    for (let p = 0; p < periodsPerDay; p++) {
+      if (grid[d]?.[p]) n++;
+    }
+  }
+  return n;
+}
+
+function lessonAvailabilityScore(task, state) {
+  let minAvail = state.totalGridSlots ?? Infinity;
+  const sAvail = state.subjectAvailable?.[task.subject];
+  if (sAvail != null) minAvail = Math.min(minAvail, sAvail);
+  for (const name of task.teachers) {
+    const tAvail = state.teacherAvailable?.[name];
+    if (tAvail != null) minAvail = Math.min(minAvail, tAvail);
+  }
+  return minAvail;
+}
+
+function isSubjectRestricted(task, state) {
+  const sAvail = state.subjectAvailable?.[task.subject];
+  return sAvail != null && sAvail < (state.totalGridSlots ?? Infinity);
+}
+
+function isTeacherRestricted(task, state) {
+  for (const name of task.teachers) {
+    const tAvail = state.teacherAvailable?.[name];
+    if (tAvail != null && tAvail < (state.totalGridSlots ?? Infinity)) return true;
+  }
+  return false;
 }
 
 function areTeachersFree(task, day, period, state) {
@@ -746,11 +795,40 @@ function placeRemainingWithShuffle(instances, state, daysPerWeek, periodsPerDay,
 }
 
 /**
+ * Lessons whose subject has restricted time-off slots — place those first
+ * (tightest restriction wins) so the few legal slots aren't filled by
+ * unrestricted lessons.
+ */
+function placeRestrictedSubjectsFirst(instances, state, daysPerWeek, periodsPerDay) {
+  const targets = instances
+    .filter((t) => !t.placed && isSubjectRestricted(t, state))
+    .sort((a, b) => lessonAvailabilityScore(a, state) - lessonAvailabilityScore(b, state));
+  for (const task of targets) {
+    if (!task.placed) tryPlaceTask(task, state, daysPerWeek, periodsPerDay);
+  }
+}
+
+/**
+ * Same idea for teachers with restricted time-off — place their lessons
+ * before the general queue grabs those rare slots.
+ */
+function placeRestrictedTeachersFirst(instances, state, daysPerWeek, periodsPerDay) {
+  const targets = instances
+    .filter((t) => !t.placed && isTeacherRestricted(t, state))
+    .sort((a, b) => lessonAvailabilityScore(a, state) - lessonAvailabilityScore(b, state));
+  for (const task of targets) {
+    if (!task.placed) tryPlaceTask(task, state, daysPerWeek, periodsPerDay);
+  }
+}
+
+/**
  * Place lessons in repeated passes until nothing new fits or rounds exhaust.
  * Remaining instances are left for the tray.
  */
 function placeAllWithRetryLoop(instances, state, classes, teachers, daysPerWeek, periodsPerDay, attempt) {
   placeClassTeacherFirstPeriods(instances, state, classes, teachers, daysPerWeek);
+  placeRestrictedSubjectsFirst(instances, state, daysPerWeek, periodsPerDay);
+  placeRestrictedTeachersFirst(instances, state, daysPerWeek, periodsPerDay);
 
   let stagnantRounds = 0;
 
@@ -762,7 +840,7 @@ function placeAllWithRetryLoop(instances, state, classes, teachers, daysPerWeek,
     const queue =
       round >= 2
         ? sortUnplacedQueue(unplaced, state, daysPerWeek, periodsPerDay)
-        : sortInstancesForPlacement(instances, attempt + round);
+        : sortInstancesForPlacement(instances, attempt + round, state);
 
     let placedThisRound = 0;
 
@@ -910,10 +988,14 @@ function placeClassTeacherFirstPeriods(instances, state, classes, teachers, days
   }
 }
 
-function sortInstancesForPlacement(instances, attempt = 0) {
+function sortInstancesForPlacement(instances, attempt = 0, state = null) {
   const list = instances
     .filter((t) => !t.invalid && !t.placed)
     .sort((a, b) => {
+      if (state) {
+        const availDiff = lessonAvailabilityScore(a, state) - lessonAvailabilityScore(b, state);
+        if (availDiff !== 0) return availDiff;
+      }
       const teacherDiff = b.teachers.length - a.teachers.length;
       if (teacherDiff !== 0) return teacherDiff;
       return a.classLabel.localeCompare(b.classLabel) || a.subject.localeCompare(b.subject);
