@@ -55,3 +55,48 @@ export function saveGeneratedTimetable(data, { freeze = false } = {}) {
 export function clearGeneratedTimetable() {
   removeUserItem(TIMETABLE_STORAGE_KEY);
 }
+
+/* ── Named saved timetables ─────────────────────────────────────────── */
+
+export const SAVED_TIMETABLES_KEY = "savedTimetables-v1";
+
+export function listSavedTimetables() {
+  const list = readUserJson(SAVED_TIMETABLES_KEY, []);
+  return Array.isArray(list) ? list : [];
+}
+
+/** Save (or overwrite, matched by name case-insensitively) under a name. */
+export function saveTimetableAs(name, timetable) {
+  const trimmed = String(name || "").trim();
+  if (!trimmed || !timetable) return listSavedTimetables();
+  const entry = {
+    id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+    name: trimmed,
+    savedAt: new Date().toISOString(),
+    timetable,
+  };
+  const next = [
+    entry,
+    ...listSavedTimetables().filter((e) => e.name.toLowerCase() !== trimmed.toLowerCase()),
+  ];
+  writeUserJson(SAVED_TIMETABLES_KEY, next);
+  return next;
+}
+
+/** Update an existing named save in place (used to auto-save edits). */
+export function updateSavedTimetable(name, timetable) {
+  const trimmed = String(name || "").trim();
+  const list = listSavedTimetables();
+  const idx = list.findIndex((e) => e.name.toLowerCase() === trimmed.toLowerCase());
+  if (idx < 0 || !timetable) return list;
+  const next = [...list];
+  next[idx] = { ...next[idx], timetable, savedAt: new Date().toISOString() };
+  writeUserJson(SAVED_TIMETABLES_KEY, next);
+  return next;
+}
+
+export function deleteSavedTimetable(id) {
+  const next = listSavedTimetables().filter((e) => e.id !== id);
+  writeUserJson(SAVED_TIMETABLES_KEY, next);
+  return next;
+}

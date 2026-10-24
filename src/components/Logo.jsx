@@ -1,0 +1,37 @@
+export default function Logo({ size = 40 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 48 48"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      className="app-logo"
+    >
+      <defs>
+        <linearGradient id="appLogoGrad" x1="2" y1="2" x2="46" y2="46" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#aacddc" />
+          <stop offset="1" stopColor="#6a8fb0" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="44" height="44" rx="13" fill="url(#appLogoGrad)" />
+      <rect x="15" y="8" width="3" height="8" rx="1.5" fill="#2c3e50" />
+      <rect x="30" y="8" width="3" height="8" rx="1.5" fill="#2c3e50" />
+      <rect x="9" y="12" width="30" height="27" rx="5" fill="#fffcf8" />
+      <rect x="9" y="12" width="30" height="9" rx="5" fill="#2c3e50" />
+      <rect x="9" y="17" width="30" height="4" fill="#2c3e50" />
+      <rect x="13.5" y="25" width="5.5" height="5.5" rx="1.4" fill="#81a6c6" />
+      <rect x="21.25" y="25" width="5.5" height="5.5" rx="1.4" fill="#81a6c6" />
+      <rect x="13.5" y="32" width="5.5" height="5.5" rx="1.4" fill="#6a8fb0" />
+      <path
+        d="M27.5 31.2l2.4 2.4 4.6-5.2"
+        stroke="#3d8a5a"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}

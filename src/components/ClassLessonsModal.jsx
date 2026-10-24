@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   getClassLessons,
+  loadClassesList,
   loadSchoolPeriodsPerWeek,
   loadSubjects,
   loadTeachers,
   saveClassLessonsForClass,
+  saveClassMeta,
+  syncTeacherLessonsFromClassLessons,
 } from "../lib/settingsStorage";
+import { flushPendingSyncs } from "../lib/userDataStorage";
 import {
   CLASS_LESSONS_CSV_HEADERS,
   CLASS_LESSONS_CSV_SAMPLE,
@@ -15,6 +19,7 @@ import {
 } from "../lib/csvSample";
 import { moveRowById } from "../lib/reorderRows";
 import CsvSampleButtons from "./CsvSampleButtons";
+import MoreClassesModal from "./MoreClassesModal";
 import MoreTeachersModal from "./MoreTeachersModal";
 import RowMoveButtons from "./RowMoveButtons";
 
@@ -25,6 +30,8 @@ function newLessonRow() {
     additionalTeachers: [],
     subject: "",
     lessonsPerWeek: "",
+    groupId: null,
+    additionalClasses: [],
     selected: false,
   };
 }
@@ -39,7 +46,7 @@ function sumLessonsPerWeek(lessonRows) {
 function parseAdditionalTeachers(cell) {
   if (!cell?.trim()) return [];
   return cell
-    .split(/[;|]/)
+    .split(/[;|/]/)
     .map((s) => s.trim())
     .filter(Boolean);
 }
@@ -47,9 +54,13 @@ function parseAdditionalTeachers(cell) {
 export default function ClassLessonsModal({ open, classRow, onClose }) {
   const [teacherNames, setTeacherNames] = useState([]);
   const [subjectNames, setSubjectNames] = useState([]);
+  const [otherClasses, setOtherClasses] = useState([]);
   const [lessons, setLessons] = useState([newLessonRow()]);
   const [moreTeachersFor, setMoreTeachersFor] = useState(null);
+  const [moreClassesFor, setMoreClassesFor] = useState(null);
   const [schoolMaxPerWeek, setSchoolMaxPerWeek] = useState(null);
+  const [classTeacher, setClassTeacher] = useState("");
+  const [classTeacherSubject, setClassTeacherSubject] = useState("");
 
   useEffect(() => {
     if (!open || !classRow) return;
@@ -70,7 +81,14 @@ export default function ClassLessonsModal({ open, classRow, onClose }) {
 
     setTeacherNames(teachers.map((t) => t.name));
     setSubjectNames(subjects.map((s) => s.name));
+    const allClasses = loadClassesList();
+    setOtherClasses(allClasses.filter((c) => c.id !== classRow.id));
     setSchoolMaxPerWeek(loadSchoolPeriodsPerWeek());
+
+    // Load saved class teacher meta
+    const thisCls = allClasses.find((c) => c.id === classRow.id);
+    setClassTeacher(thisCls?.classTeacher || "");
+    setClassTeacherSubject(thisCls?.classTeacherSubject || "");
 
     const saved = getClassLessons(classRow.id);
     if (saved.length) {
@@ -81,6 +99,8 @@ export default function ClassLessonsModal({ open, classRow, onClose }) {
           additionalTeachers: Array.isArray(item.additionalTeachers) ? item.additionalTeachers : [],
           subject: item.subject ?? "",
           lessonsPerWeek: item.lessonsPerWeek ?? "",
+          groupId: item.groupId ?? null,
+          additionalClasses: Array.isArray(item.additionalClasses) ? item.additionalClasses : [],
           selected: false,
         }))
       );
@@ -92,6 +112,31 @@ export default function ClassLessonsModal({ open, classRow, onClose }) {
   const totalPerWeek = useMemo(() => sumLessonsPerWeek(lessons), [lessons]);
   const overSchoolLimit =
     schoolMaxPerWeek != null && totalPerWeek > schoolMaxPerWeek;
+
+  // Reset class teacher selection if teacher is removed from lessons
+  useEffect(() => {
+    if (classTeacher && !lessons.some((l) => l.primaryTeacher === classTeacher)) {
+      setClassTeacher("");
+      setClassTeacherSubject("");
+    }
+  }, [lessons, classTeacher]);
+
+  // Only teachers who have at least one lesson row in this class
+  const classTeacherOptions = useMemo(() => {
+    const names = new Set(lessons.map((l) => l.primaryTeacher).filter(Boolean));
+    return [...names].sort();
+  }, [lessons]);
+
+  // Only subjects where the selected class teacher is the primary teacher
+  const classTeacherSubjectOptions = useMemo(() => {
+    if (!classTeacher) return [];
+    const subjects = new Set(
+      lessons
+        .filter((l) => l.primaryTeacher === classTeacher && l.subject)
+        .map((l) => l.subject)
+    );
+    return [...subjects].sort();
+  }, [lessons, classTeacher]);
 
   if (!open || !classRow) return null;
 
@@ -157,27 +202,67 @@ export default function ClassLessonsModal({ open, classRow, onClose }) {
     downloadCsvFile("class-lessons-sample.csv", CLASS_LESSONS_CSV_HEADERS, CLASS_LESSONS_CSV_SAMPLE);
   };
 
+  // Signature used to detect duplicate lesson rows (same teacher, subject,
+  // periods, and set of additional classes).
+  const lessonSignature = (l) =>
+    [
+      String(l.primaryTeacher || "").trim().toLowerCase(),
+      String(l.subject || "").trim().toLowerCase(),
+      String(Number(l.lessonsPerWeek) || 0),
+      [...(l.additionalClasses || [])].sort().join(","),
+    ].join("|");
+
   const uploadLessonsSample = (file) => {
     const reader = new FileReader();
     reader.onload = () => {
       const rows = parseCsv(String(reader.result ?? ""));
-      const check = validateCsvFormat(rows, CLASS_LESSONS_CSV_HEADERS);
+      // Accept both the new 5-column format (with "Additional classes") and
+      // the legacy 4-column format.
+      let check = validateCsvFormat(rows, CLASS_LESSONS_CSV_HEADERS);
       if (!check.ok) {
-        alert(check.message);
-        return;
+        const legacy = validateCsvFormat(rows, CLASS_LESSONS_CSV_HEADERS.slice(0, 4));
+        if (legacy.ok) check = legacy;
+        else {
+          alert(check.message);
+          return;
+        }
       }
+
+      // Resolve class names (title like "IA" or grade+section label like "1A")
+      // to class ids, case-insensitively.
+      const classIdByName = new Map();
+      for (const c of otherClasses) {
+        const title = String(c.title || "").trim().toLowerCase();
+        const label = String(c.label || "").trim().toLowerCase();
+        if (title && !classIdByName.has(title)) classIdByName.set(title, c.id);
+        if (label && !classIdByName.has(label)) classIdByName.set(label, c.id);
+      }
+      const currentClassNames = new Set(
+        [
+          String(classRow.title || "").trim().toLowerCase(),
+          [classRow.grade, classRow.section].filter(Boolean).join("").toLowerCase(),
+        ].filter(Boolean)
+      );
 
       const imported = [];
       const errors = [];
 
       check.dataRows.forEach((cells, i) => {
-        const teacher = cells[0]?.trim() ?? "";
+        // Teacher cell may hold several names separated by "/" — first is
+        // primary, the rest are added to "More teachers".
+        const teacherEntries = parseAdditionalTeachers(cells[0]);
+        const teacher = teacherEntries[0] ?? "";
         const subject = cells[1]?.trim() ?? "";
         const lpw = cells[2]?.trim() ?? "";
-        const extra = parseAdditionalTeachers(cells[3]);
+        const extra = [...teacherEntries.slice(1), ...parseAdditionalTeachers(cells[3])];
 
         if (!teacherNames.includes(teacher)) {
           errors.push(`Row ${i + 2}: unknown teacher "${teacher}".`);
+          return;
+        }
+        const unknownExtras = extra.filter((name) => !teacherNames.includes(name));
+        if (unknownExtras.length) {
+          errors.push(`Row ${i + 2}: unknown additional teacher(s) ${unknownExtras.map((n) => `"${n}"`).join(", ")}.`);
           return;
         }
         if (!subjectNames.includes(subject)) {
@@ -190,12 +275,31 @@ export default function ClassLessonsModal({ open, classRow, onClose }) {
           return;
         }
 
+        // "Additional classes" column: names separated by "/", ";" or "|".
+        // The lesson is shared with those classes on save (no duplication —
+        // mirrored rows are matched by group id).
+        const classNames = parseAdditionalTeachers(cells[4] ?? "");
+        const additionalClasses = [];
+        const unknownClasses = [];
+        for (const rawName of classNames) {
+          const key = rawName.trim().toLowerCase();
+          if (!key || currentClassNames.has(key)) continue; // current class is implicit
+          const id = classIdByName.get(key);
+          if (!id) unknownClasses.push(rawName);
+          else if (!additionalClasses.includes(id)) additionalClasses.push(id);
+        }
+        if (unknownClasses.length) {
+          errors.push(`Row ${i + 2}: unknown class(es) ${unknownClasses.map((n2) => `"${n2}"`).join(", ")}.`);
+          return;
+        }
+
         imported.push({
           ...newLessonRow(),
           primaryTeacher: teacher,
           subject,
           lessonsPerWeek: String(n),
-          additionalTeachers: extra.filter((name) => teacherNames.includes(name) && name !== teacher),
+          additionalTeachers: [...new Set(extra)].filter((name) => name !== teacher),
+          additionalClasses,
         });
       });
 
@@ -204,13 +308,36 @@ export default function ClassLessonsModal({ open, classRow, onClose }) {
       }
       if (!imported.length) return;
 
-      const merged = [...lessons.filter((l) => l.primaryTeacher || l.subject || l.lessonsPerWeek), ...imported];
+      // Merge, skipping rows that already exist (no duplication).
+      const kept = lessons.filter((l) => l.primaryTeacher || l.subject || l.lessonsPerWeek);
+      const seen = new Set(kept.map(lessonSignature));
+      const merged = [...kept];
+      let skipped = 0;
+      for (const row of imported) {
+        const sig = lessonSignature(row);
+        if (seen.has(sig)) {
+          skipped++;
+          continue;
+        }
+        seen.add(sig);
+        merged.push(row);
+      }
+
+      const added = merged.length - kept.length;
+      if (!added) {
+        alert(`No new lessons added — ${skipped} duplicate row(s) skipped.`);
+        return;
+      }
+
       const base = merged.length ? merged : imported;
       const newTotal = sumLessonsPerWeek(base);
       if (!checkTotalWithinLimit(newTotal, "uploading lessons")) return;
 
       setLessons(base);
-      alert(`Added ${imported.length} lesson row(s) from CSV.`);
+      alert(
+        `Added ${added} lesson row(s) from CSV.` +
+          (skipped ? ` Skipped ${skipped} duplicate(s).` : "")
+      );
     };
     reader.readAsText(file);
   };
@@ -241,14 +368,19 @@ export default function ClassLessonsModal({ open, classRow, onClose }) {
       additionalTeachers: l.additionalTeachers,
       subject: l.subject,
       lessonsPerWeek: Number(l.lessonsPerWeek),
+      groupId: l.additionalClasses?.length ? l.groupId || l.id : null,
+      additionalClasses: l.additionalClasses?.length ? l.additionalClasses : [],
     }));
 
+    saveClassMeta(classRow.id, { classTeacher, classTeacherSubject });
     saveClassLessonsForClass(classRow.id, payload);
+    flushPendingSyncs();
     alert(`Lessons saved for ${headingTitle}. Teacher lessons were updated from class lessons.`);
     onClose();
   };
 
   const activeLesson = moreTeachersFor ? lessons.find((l) => l.id === moreTeachersFor) : null;
+  const activeClassesLesson = moreClassesFor ? lessons.find((l) => l.id === moreClassesFor) : null;
 
   return (
     <>
@@ -262,6 +394,46 @@ export default function ClassLessonsModal({ open, classRow, onClose }) {
           <h3 id="class-lessons-title" className="modal-title">
             {headingTitle}
           </h3>
+
+          {/* Class Teacher section */}
+          <div className="class-teacher-section">
+            <span className="class-teacher-section__label">Class Teacher</span>
+            <div className="class-teacher-section__fields">
+              <select
+                value={classTeacher}
+                onChange={(e) => {
+                  setClassTeacher(e.target.value);
+                  setClassTeacherSubject("");
+                  saveClassMeta(classRow.id, { classTeacher: e.target.value, classTeacherSubject: "" });
+                  syncTeacherLessonsFromClassLessons();
+                }}
+              >
+                <option value="">— Select teacher —</option>
+                {classTeacherOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <select
+                value={classTeacherSubject}
+                onChange={(e) => {
+                  setClassTeacherSubject(e.target.value);
+                  saveClassMeta(classRow.id, { classTeacher, classTeacherSubject: e.target.value });
+                  syncTeacherLessonsFromClassLessons();
+                }}
+                disabled={!classTeacher || classTeacherSubjectOptions.length === 0}
+              >
+                <option value="">— Select subject —</option>
+                {classTeacherSubjectOptions.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              {classTeacher && (
+                <span className="class-teacher-section__badge">
+                  {classTeacher}{classTeacherSubject ? ` · ${classTeacherSubject}` : ""}
+                </span>
+              )}
+            </div>
+          </div>
 
           <CsvSampleButtons onDownload={downloadLessonsSample} onUploadFile={uploadLessonsSample} />
 
@@ -336,19 +508,40 @@ export default function ClassLessonsModal({ open, classRow, onClose }) {
                       />
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn--sm"
-                        onClick={() => {
-                          if (!lesson.primaryTeacher) {
-                            alert("Select a teacher first.");
-                            return;
-                          }
-                          setMoreTeachersFor(lesson.id);
-                        }}
-                      >
-                        More teachers
-                      </button>
+                      <div className="more-buttons-stack">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn--sm"
+                          onClick={() => {
+                            if (!lesson.primaryTeacher) {
+                              alert("Select a teacher first.");
+                              return;
+                            }
+                            setMoreTeachersFor(lesson.id);
+                          }}
+                        >
+                          More teachers
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn--sm"
+                          onClick={() => setMoreClassesFor(lesson.id)}
+                        >
+                          More classes
+                        </button>
+                      </div>
+                      {lesson.additionalClasses.length > 0 && (
+                        <div className="teacher-extra-labels teacher-extra-labels--inline">
+                          {lesson.additionalClasses.map((id) => {
+                            const cls = otherClasses.find((c) => c.id === id);
+                            return (
+                              <span key={id} className="teacher-chip">
+                                {String(cls?.title || "").trim() || cls?.label || id}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                     </td>
                     <td className="classes-actions-cell">
                       <button type="button" className="add-period-btn" onClick={() => addAfter(lesson.id)} title="Add lesson">
@@ -399,6 +592,19 @@ export default function ClassLessonsModal({ open, classRow, onClose }) {
         onSave={(names) => {
           if (moreTeachersFor) {
             updateLesson(moreTeachersFor, "additionalTeachers", names);
+          }
+        }}
+      />
+
+      <MoreClassesModal
+        open={Boolean(moreClassesFor && activeClassesLesson)}
+        allClasses={otherClasses}
+        currentClassId={classRow.id}
+        initialSelected={activeClassesLesson?.additionalClasses ?? []}
+        onClose={() => setMoreClassesFor(null)}
+        onSave={(classIds) => {
+          if (moreClassesFor) {
+            updateLesson(moreClassesFor, "additionalClasses", classIds);
           }
         }}
       />

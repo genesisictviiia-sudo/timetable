@@ -1,10 +1,18 @@
-/** Prefix for per-user app data in localStorage. */
-const USER_DATA_PREFIX = "subst.userData.";
+/**
+ * Per-user data storage.
+ *
+ * localStorage is the fast synchronous cache (so all existing code keeps working).
+ * Supabase (via the backend API) is the durable store.
+ *
+ * On login: hydrateFromApi() loads all keys from the server into localStorage.
+ * On every write: writeUserJson() saves to localStorage AND async-syncs to the API.
+ */
+import { api, API_BASE, getToken } from "./apiClient";
 
+const USER_DATA_PREFIX = "subst.userData.";
 const SESSION_KEY = "subst.auth.session";
 const LEGACY_MIGRATED_FLAG = "subst.legacyDataMigrated";
 
-/** App data keys that are stored separately for each signed-in user. */
 export const USER_SCOPED_DATA_KEYS = [
   "teachers",
   "subjects",
@@ -12,6 +20,9 @@ export const USER_SCOPED_DATA_KEYS = [
   "classes",
   "school",
   "generatedTimetable-v1",
+  "savedTimetables-v1",
+  "invigilations-v1",
+  "invigilations-saved-v1",
   "substitution-assignments-v2",
   "substitution-assignments-v1",
   "substitution-last-date-v1",
@@ -43,6 +54,86 @@ function requireActiveUserEmail() {
   return email;
 }
 
+/**
+ * Sync a single key to the backend — debounced per key so rapid changes
+ * (e.g. typing in a form) produce one write instead of one per keystroke.
+ * localStorage is always written immediately; only the server PUT is delayed.
+ */
+const SYNC_DEBOUNCE_MS = 2500;
+const pendingSyncValues = new Map();
+const pendingSyncTimers = new Map();
+
+function flushSyncKey(baseKey) {
+  const value = pendingSyncValues.get(baseKey);
+  pendingSyncValues.delete(baseKey);
+  clearTimeout(pendingSyncTimers.get(baseKey));
+  pendingSyncTimers.delete(baseKey);
+  if (value === undefined || !getToken()) return;
+  api.put(`/api/data/${encodeURIComponent(baseKey)}`, value).catch((err) => {
+    console.warn(`[sync] Failed to sync "${baseKey}" to server:`, err.message);
+  });
+}
+
+function syncKeyToApi(baseKey, value) {
+  if (!getToken()) return;
+  pendingSyncValues.set(baseKey, value);
+  clearTimeout(pendingSyncTimers.get(baseKey));
+  pendingSyncTimers.set(
+    baseKey,
+    setTimeout(() => flushSyncKey(baseKey), SYNC_DEBOUNCE_MS)
+  );
+}
+
+/**
+ * Push every pending (debounced) write to the server right now. Called by
+ * explicit "Save" buttons so a clicked save is permanent immediately.
+ */
+export function flushPendingSyncs() {
+  for (const baseKey of [...pendingSyncValues.keys()]) {
+    flushSyncKey(baseKey);
+  }
+}
+
+// Flush any pending (debounced) writes when the tab is closed or hidden so
+// the last change still reaches the server.
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    const token = getToken();
+    if (!token) return;
+    for (const [baseKey, value] of pendingSyncValues) {
+      try {
+        fetch(`${API_BASE}/api/data/${encodeURIComponent(baseKey)}`, {
+          method: "PUT",
+          keepalive: true,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(value),
+        });
+      } catch {
+        /* best effort */
+      }
+    }
+    pendingSyncValues.clear();
+  });
+}
+
+/** Load all user data from the backend into localStorage. Called once on login. */
+export async function hydrateFromApi() {
+  if (!getToken()) return;
+  try {
+    const allData = await api.get("/api/data");
+    const email = getActiveUserEmail();
+    if (!email) return;
+    for (const [key, value] of Object.entries(allData)) {
+      localStorage.setItem(scopedKey(email, key), JSON.stringify(value));
+    }
+  } catch (err) {
+    console.warn("[hydrate] Could not load data from server:", err.message);
+  }
+}
+
 export function readUserJson(baseKey, fallback) {
   const email = getActiveUserEmail();
   if (!email) return fallback;
@@ -58,6 +149,7 @@ export function readUserJson(baseKey, fallback) {
 export function writeUserJson(baseKey, value) {
   const email = requireActiveUserEmail();
   localStorage.setItem(scopedKey(email, baseKey), JSON.stringify(value));
+  syncKeyToApi(baseKey, value);
 }
 
 export function readUserRaw(baseKey) {
@@ -69,18 +161,23 @@ export function readUserRaw(baseKey) {
 export function writeUserRaw(baseKey, value) {
   const email = requireActiveUserEmail();
   localStorage.setItem(scopedKey(email, baseKey), value);
+  try {
+    syncKeyToApi(baseKey, JSON.parse(value));
+  } catch {
+    // not valid JSON — skip API sync
+  }
 }
 
 export function removeUserItem(baseKey) {
   const email = getActiveUserEmail();
   if (!email) return;
   localStorage.removeItem(scopedKey(email, baseKey));
+  if (getToken()) {
+    api.delete(`/api/data/${encodeURIComponent(baseKey)}`).catch(console.warn);
+  }
 }
 
-/**
- * Move pre-login global data to the first account that signs in after this update.
- * New accounts created after migration always start with empty scoped storage.
- */
+/** Migrate pre-login global data to the first account that signs in after this update. */
 export function migrateLegacyGlobalDataForUser(email) {
   const normalized = normalizeEmail(email);
   if (!normalized || localStorage.getItem(LEGACY_MIGRATED_FLAG)) return;
@@ -99,7 +196,7 @@ export function migrateLegacyGlobalDataForUser(email) {
   }
 }
 
-/** Called after login — existing users may receive one-time legacy data migration. */
+/** Called after login. */
 export function onUserSessionStarted(email, { isNewAccount = false } = {}) {
   if (!isNewAccount) {
     migrateLegacyGlobalDataForUser(email);

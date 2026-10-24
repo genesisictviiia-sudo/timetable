@@ -1,7 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   buildPlacementPreview,
+  forceMoveCardToSlot,
   getCellCard,
+  getPlacementConflicts,
   makeSlotKey,
   moveCardToSlot,
   removeCardToTray,
@@ -19,6 +21,9 @@ export default function TimetableGrid({
   onWarning,
   onClearWarning,
 }) {
+  // {cardId, day, period, conflicts: [{cardId, classLabel, subject, teacher}]}
+  const [conflictPrompt, setConflictPrompt] = useState(null);
+
   if (!timetable || !currentClass) {
     return <p className="card-desc">No class selected.</p>;
   }
@@ -65,8 +70,47 @@ export default function TimetableGrid({
     const cardId = e.dataTransfer.getData("text/plain") || draggingCardId;
     if (!cardId) return;
     const result = moveCardToSlot(timetable, cardId, currentClass.id, day, period);
+
+    if (!result.ok) {
+      // If the failure is a teacher clash with card(s) already placed
+      // elsewhere, offer "Remove collisions / Ignore / Cancel" instead of
+      // rejecting outright.
+      const conflicts = getPlacementConflicts(timetable, cardId, day, period);
+      if (conflicts.length) {
+        setConflictPrompt({ cardId, day, period, conflicts });
+        onDragEnd?.();
+        return;
+      }
+    }
+
     applyChange(result);
     onDragEnd?.();
+  };
+
+  const resolveConflict = (mode) => {
+    if (!conflictPrompt) return;
+    const { cardId, day, period, conflicts } = conflictPrompt;
+    setConflictPrompt(null);
+
+    if (mode === "remove") {
+      // Clashing card(s) go to the tray; the dragged card takes the slot.
+      const result = forceMoveCardToSlot(
+        timetable,
+        cardId,
+        currentClass.id,
+        day,
+        period,
+        conflicts.map((c) => c.cardId)
+      );
+      applyChange(result);
+      return;
+    }
+
+    if (mode === "ignore") {
+      // The dragged card goes back to the tray; nothing else changes.
+      const result = removeCardToTray(timetable, cardId);
+      applyChange(result);
+    }
   };
 
   const handleRemoveToTray = (cardId) => {
@@ -79,7 +123,41 @@ export default function TimetableGrid({
     applyChange(result);
   };
 
+  const conflictDayLabel = conflictPrompt ? (days[conflictPrompt.day]?.dayLabel ?? `Day ${conflictPrompt.day + 1}`) : "";
+  const conflictPeriodLabel = conflictPrompt
+    ? (uniquePeriods[conflictPrompt.period]?.periodLabel ?? `P${conflictPrompt.period + 1}`)
+    : "";
+
   return (
+    <>
+    {conflictPrompt && (
+      <div className="modal-overlay" role="dialog" aria-modal="true" onClick={() => resolveConflict("cancel")}>
+        <div className="modal-card tt-conflict-card" onClick={(e) => e.stopPropagation()}>
+          <h3 className="modal-title">Collisions found</h3>
+          <p className="card-desc" style={{ marginBottom: "0.75rem" }}>
+            Placing this lesson at <strong>{conflictDayLabel} · {conflictPeriodLabel}</strong> clashes with:
+          </p>
+          <ul className="tt-conflict-list">
+            {conflictPrompt.conflicts.map((c) => (
+              <li key={c.cardId} className="tt-conflict-list__item">
+                <span className="tt-conflict-list__badge" aria-hidden />
+                <span>
+                  <strong>{c.subject}</strong> ({c.classLabel}) — {c.teacher}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="tt-conflict-actions">
+            <button type="button" className="btn btn-primary" onClick={() => resolveConflict("remove")}>
+              ✓ Remove collision — move clashing card(s) to the tray and place this card
+            </button>
+            <button type="button" className="btn btn-outline" onClick={() => resolveConflict("ignore")}>
+              Ignore — send this card back to the tray
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className={`tt-grid-wrap${isDragging ? " tt-grid-wrap--placing" : ""}`}>
       <table className="period-table tt-grid tt-grid--single-class">
         <thead>
@@ -115,9 +193,11 @@ export default function TimetableGrid({
                     key={slotKey}
                     className={`tt-grid__cell${isEmpty ? " tt-grid__cell--empty" : ""}${placeClass}`}
                     onDragOver={(e) => {
+                      // Always accept the drop — a red (conflicting) cell must
+                      // still receive the drop event so the collision menu can
+                      // open with Remove/Ignore choices.
                       e.preventDefault();
-                      e.dataTransfer.dropEffect =
-                        placementPreview?.[slotKey] ? "move" : "none";
+                      e.dataTransfer.dropEffect = "move";
                     }}
                     onDrop={(e) => handleDropOnCell(day, period, e)}
                   >
@@ -143,5 +223,6 @@ export default function TimetableGrid({
         </tbody>
       </table>
     </div>
+    </>
   );
 }

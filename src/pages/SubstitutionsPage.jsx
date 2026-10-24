@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildSubstitutionDataset } from "../lib/substitutionData";
+import { flushPendingSyncs } from "../lib/userDataStorage";
 import { getDayName, isSchoolDay } from "../lib/dates";
 import {
   adjacentSavedSubstitutionDate,
@@ -262,6 +263,7 @@ export default function SubstitutionsPage() {
       alert("Could not save substitutions.");
       return;
     }
+    flushPendingSyncs();
     setSubstitutionsDirty(false);
     setSaveVersion((v) => v + 1);
     alert(

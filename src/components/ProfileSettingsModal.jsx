@@ -20,7 +20,7 @@ export default function ProfileSettingsModal({ open, user, onClose, onUserChange
 
   if (!open) return null;
 
-  const displayName = user.profile?.name?.trim() || user.email;
+  const displayName = user.profile?.name?.trim() || user.userId || user.email;
   const memberSince = user.profile.createdAt
     ? new Date(user.profile.createdAt).toLocaleDateString()
     : "—";
@@ -71,6 +71,11 @@ export default function ProfileSettingsModal({ open, user, onClose, onUserChange
             <UserAvatar displayName={displayName} email={user.email} size={48} />
             <div>
               <h3 className="modal-title profile-settings-modal__title">{displayName}</h3>
+              {user.userId && user.userId !== user.email && (
+                <p className="profile-settings-modal__email" style={{ marginBottom: "0.1rem" }}>
+                  User ID: <strong>{user.userId}</strong>
+                </p>
+              )}
               <p className="profile-settings-modal__email">{user.email}</p>
             </div>
           </div>

@@ -13,11 +13,7 @@ export function isEmailJsConfigured() {
   );
 }
 
-/**
- * Send the reset code to the user's email via EmailJS.
- * Returns { delivered: true } on success, or { delivered: false } when not configured / failed.
- */
-export async function sendPasswordResetEmail(toEmail, resetCode) {
+async function sendViaEmailJs(toEmail, passcode, time) {
   const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID;
   const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
   const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
@@ -35,37 +31,25 @@ export async function sendPasswordResetEmail(toEmail, resetCode) {
         template_id: templateId,
         user_id: publicKey,
         template_params: {
-          to_email: toEmail,
-          from_email: PASSWORD_RESET_FROM_EMAIL,
-          from_name: PASSWORD_RESET_FROM_NAME,
-          reply_to: PASSWORD_RESET_FROM_EMAIL,
-          reset_code: resetCode,
-          subject: "Campus Scheduler – Password reset code",
-          message: [
-            "You requested a password reset for Campus Scheduler.",
-            "",
-            `Your reset code is: ${resetCode}`,
-            "",
-            "This code expires in 15 minutes.",
-            "",
-            "If you did not request this, you can ignore this email.",
-          ].join("\n"),
+          email: toEmail,        // matches {{email}} in template
+          passcode,              // matches {{passcode}} in template
+          time,                  // matches {{time}} in template
         },
       }),
     });
 
+    // Read body once as text, then optionally parse as JSON
+    const rawText = await response.text().catch(() => "");
     if (!response.ok) {
-      let detail = "";
+      let detail = rawText;
       try {
-        const body = await response.json();
-        detail = body?.message || body?.error || "";
-      } catch {
-        detail = await response.text().catch(() => "");
-      }
+        const body = JSON.parse(rawText);
+        detail = body?.message || body?.error || body?.status || rawText;
+      } catch { /* keep rawText */ }
       return {
         delivered: false,
         reason: "send_failed",
-        detail: detail || "Email could not be sent.",
+        detail: detail || `HTTP ${response.status}`,
       };
     }
 
@@ -77,4 +61,58 @@ export async function sendPasswordResetEmail(toEmail, resetCode) {
       detail: err.message || "Network error while sending email.",
     };
   }
+}
+
+export async function sendPasswordResetEmail(toEmail, resetCode) {
+  return sendViaEmailJs(toEmail, resetCode, "15 minutes");
+}
+
+export async function sendSubscriptionEnquiry({ name, email, mobile }) {
+  // Enquiries may use a completely separate EmailJS account (its own service,
+  // template and public key); anything not set falls back to the main account.
+  const serviceId =
+    import.meta.env.VITE_EMAILJS_ENQUIRY_SERVICE_ID || import.meta.env.VITE_EMAILJS_SERVICE_ID;
+  const enquiryTemplateId = import.meta.env.VITE_EMAILJS_ENQUIRY_TEMPLATE_ID;
+  const otpTemplateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
+  const templateId = enquiryTemplateId || otpTemplateId;
+  const publicKey =
+    import.meta.env.VITE_EMAILJS_ENQUIRY_PUBLIC_KEY || import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+  if (!serviceId || !templateId || !publicKey) return { delivered: false, reason: "not_configured" };
+
+  const templateParams = enquiryTemplateId
+    ? {
+        // Dedicated enquiry template variables
+        email: PASSWORD_RESET_FROM_EMAIL, // To: admin inbox
+        name,
+        user_email: email,
+        mobile,
+      }
+    : {
+        // Legacy fallback via the OTP template
+        email: PASSWORD_RESET_FROM_EMAIL,
+        passcode: `Name: ${name} | Email: ${email} | Mobile: ${mobile}`,
+        time: "Prime Subscription Enquiry",
+      };
+
+  try {
+    const response = await fetch(EMAILJS_SEND_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_id: serviceId,
+        template_id: templateId,
+        user_id: publicKey,
+        template_params: templateParams,
+      }),
+    });
+    const rawText = await response.text().catch(() => "");
+    if (!response.ok) return { delivered: false, reason: "send_failed", detail: rawText };
+    return { delivered: true };
+  } catch (err) {
+    return { delivered: false, reason: "send_failed", detail: err.message };
+  }
+}
+
+export async function sendSignupOtpEmail(toEmail, userId, otp) {
+  return sendViaEmailJs(toEmail, otp, "30 minutes");
 }

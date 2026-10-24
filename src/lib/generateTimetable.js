@@ -68,25 +68,39 @@ function emptyClassGrid(daysPerWeek, periodsPerDay) {
   );
 }
 
-function findClassTeacherForClass(teachers, cls) {
+function findClassTeacherForClass(teachers, cls, classLessonsMap) {
+  // 1. Source of truth: the class's own lesson rows (Class → Lessons), where
+  // the row's isClassTeacher flag is set directly against this class — not
+  // derived secondhand from a teacher record that may be stale.
+  const rows = Array.isArray(classLessonsMap?.[cls.id]) ? classLessonsMap[cls.id] : [];
+  const ctRow = rows.find((l) => l.isClassTeacher);
+  if (ctRow) {
+    const teacherName = String(ctRow.primaryTeacher || "").trim();
+    const subject = String(ctRow.subject || "").trim();
+    if (teacherName && subject) return { teacherName, subject, groupId: ctRow.groupId || null };
+  }
+
+  // 2. Fallback: teacher records, for data saved before the class-lesson flag existed.
   const classLabel = cls.label;
   const classTitle = String(cls.title || "").trim() || classLabel;
+  const lessonCoversClass = (l) =>
+    l.classLabel === classLabel || (Array.isArray(l.additionalClasses) && l.additionalClasses.includes(classLabel));
 
   for (const t of teachers) {
     const stored = String(t.classTeacher || "").trim();
     if (!stored) continue;
     if (stored !== classTitle && stored !== classLabel) continue;
     const row =
-      (t.lessons || []).find((l) => l.classLabel === classLabel && l.isClassTeacher) ||
+      (t.lessons || []).find((l) => lessonCoversClass(l) && l.isClassTeacher) ||
       (t.lessons || []).find((l) => l.isClassTeacher) ||
-      (t.lessons || []).find((l) => l.classLabel === classLabel);
+      (t.lessons || []).find((l) => lessonCoversClass(l));
     if (row) {
       return { teacherName: t.name, subject: row.subject };
     }
   }
 
   for (const t of teachers) {
-    const row = (t.lessons || []).find((l) => l.isClassTeacher && l.classLabel === classLabel);
+    const row = (t.lessons || []).find((l) => l.isClassTeacher && lessonCoversClass(l));
     if (row) {
       return { teacherName: t.name, subject: row.subject };
     }
@@ -99,7 +113,9 @@ function buildAllowedTeacherSet(teachers, classLessonsMap, classId, classLabel, 
 
   for (const t of teachers) {
     const match = (t.lessons || []).some(
-      (l) => l.classLabel === classLabel && l.subject === subject
+      (l) =>
+        l.subject === subject &&
+        (l.classLabel === classLabel || (Array.isArray(l.additionalClasses) && l.additionalClasses.includes(classLabel)))
     );
     if (match) allowed.add(t.name);
   }
@@ -207,6 +223,14 @@ function createGeneratorState({
       : Number(constraints.maxConsecutiveClassesPerDay);
 
   const totalGridSlots = daysPerWeek * periodsPerDay;
+  // The default (unrestricted) time-off grid is already capped at the school's
+  // periods-per-week limit, so an unrestricted subject/teacher only ever shows
+  // that many available slots — never the full day×period grid. Compare against
+  // this cap, not totalGridSlots, or every subject looks "restricted" whenever
+  // periodsPerWeek is less than daysPerWeek * periodsPerDay (the common case).
+  const ppwNum = Number(periodsPerWeek);
+  const fullAvailability =
+    Number.isFinite(ppwNum) && ppwNum > 0 ? Math.min(ppwNum, totalGridSlots) : totalGridSlots;
   const subjectAvailable = {};
   for (const s of subjects) {
     subjectAvailable[s.name] = countAvailableSlots(subjectTimeOff[s.name], daysPerWeek, periodsPerDay);
@@ -226,6 +250,7 @@ function createGeneratorState({
     teacherAvailable,
     subjectAvailable,
     totalGridSlots,
+    fullAvailability,
     daysPerWeek,
     periodsPerDay,
     periodsPerWeek,
@@ -253,7 +278,7 @@ function countAvailableSlots(grid, daysPerWeek, periodsPerDay) {
 }
 
 function lessonAvailabilityScore(task, state) {
-  let minAvail = state.totalGridSlots ?? Infinity;
+  let minAvail = state.fullAvailability ?? state.totalGridSlots ?? Infinity;
   const sAvail = state.subjectAvailable?.[task.subject];
   if (sAvail != null) minAvail = Math.min(minAvail, sAvail);
   for (const name of task.teachers) {
@@ -264,14 +289,16 @@ function lessonAvailabilityScore(task, state) {
 }
 
 function isSubjectRestricted(task, state) {
+  const full = state.fullAvailability ?? state.totalGridSlots ?? Infinity;
   const sAvail = state.subjectAvailable?.[task.subject];
-  return sAvail != null && sAvail < (state.totalGridSlots ?? Infinity);
+  return sAvail != null && sAvail < full;
 }
 
 function isTeacherRestricted(task, state) {
+  const full = state.fullAvailability ?? state.totalGridSlots ?? Infinity;
   for (const name of task.teachers) {
     const tAvail = state.teacherAvailable?.[name];
-    if (tAvail != null && tAvail < (state.totalGridSlots ?? Infinity)) return true;
+    if (tAvail != null && tAvail < full) return true;
   }
   return false;
 }
@@ -311,10 +338,10 @@ function passesConsecutiveLimit(name, day, period, state, flags) {
 
 function canPlace(task, day, period, state, flags) {
   if (!areTeachersFree(task, day, period, state)) return false;
-  if (!isSubjectAvailable(task.subject, day, period, state)) return false;
+  if (!flags.ignoreSubjectAvailability && !isSubjectAvailable(task.subject, day, period, state)) return false;
 
   for (const name of task.teachers) {
-    if (!isTeacherAvailable(name, day, period, state)) return false;
+    if (!flags.ignoreTeacherAvailability && !isTeacherAvailable(name, day, period, state)) return false;
     if (!passesDailyLimit(name, day, state, flags)) return false;
     if (!passesConsecutiveLimit(name, day, period, state, flags)) return false;
   }
@@ -322,6 +349,14 @@ function canPlace(task, day, period, state, flags) {
   const grid = state.classGrids[task.classId];
   if (grid[day][period]) return false;
 
+  return true;
+}
+
+/** True when every {task, day, period} placement in the list is individually legal. */
+function canPlaceAll(placements, state, flags) {
+  for (const { task, day, period } of placements) {
+    if (!canPlace(task, day, period, state, flags)) return false;
+  }
   return true;
 }
 
@@ -336,6 +371,8 @@ function placeLesson(task, day, period, state, levelId) {
     subject: task.subject,
     teachers: [...task.teachers],
     lessonId: task.lessonId,
+    groupId: task.groupId || null,
+    instanceIndex: task.instanceIndex,
   };
 
   state.classGrids[task.classId][day][period] = cell;
@@ -355,99 +392,26 @@ function placeLesson(task, day, period, state, levelId) {
   }
 }
 
-function unplaceTask(task, state) {
+/** Exact inverse of placeLesson — frees the slot and the teachers' bookkeeping. */
+function removeLesson(task, state) {
   if (!task.placed) return;
+  const { placedDay: day, placedPeriod: period } = task;
 
-  const day = task.placedDay;
-  const period = task.placedPeriod;
-  const grid = state.classGrids[task.classId];
-  if (grid?.[day]?.[period]) {
-    grid[day][period] = null;
-  }
+  state.classGrids[task.classId][day][period] = null;
 
   for (const name of task.teachers) {
     state.teacherBusy.delete(teacherBusyKey(name, day, period));
-    if (state.teacherDayCount[name]?.[day] > 0) {
-      state.teacherDayCount[name][day] -= 1;
-    }
-    const periods = state.teacherDayPeriods[name]?.[day];
-    if (periods) {
-      const idx = periods.indexOf(period);
-      if (idx >= 0) periods.splice(idx, 1);
-    }
+    state.teacherDayCount[name][day] -= 1;
+    const periods = state.teacherDayPeriods[name][day];
+    const idx = periods.indexOf(period);
+    if (idx >= 0) periods.splice(idx, 1);
   }
 
   task.placed = false;
-  delete task.placedDay;
-  delete task.placedPeriod;
+  task.placedDay = undefined;
+  task.placedPeriod = undefined;
 }
 
-function unplaceTasks(tasks, state) {
-  for (const task of tasks) {
-    if (task.placed) unplaceTask(task, state);
-  }
-}
-
-function scoreSlot(task, day, period, state, daysPerWeek, periodsPerDay) {
-  let score = period;
-  const grid = state.classGrids[task.classId];
-
-  let subjectOnDay = 0;
-  for (let p = 0; p < periodsPerDay; p++) {
-    if (grid[day][p]?.subject === task.subject) subjectOnDay++;
-  }
-  score += subjectOnDay * 12;
-
-  if (period > 0 && grid[day][period - 1]?.subject === task.subject) score += 50;
-
-  let subjectSlotsWeek = 0;
-  for (let d = 0; d < daysPerWeek; d++) {
-    for (let p = 0; p < periodsPerDay; p++) {
-      if (grid[d][p]?.subject === task.subject) subjectSlotsWeek++;
-    }
-  }
-  score += Math.floor(subjectSlotsWeek / daysPerWeek) * 6;
-
-  for (const name of task.teachers) {
-    score += (state.teacherDayCount[name]?.[day] ?? 0) * 4;
-  }
-
-  return score;
-}
-
-function findBestSlot(task, state, daysPerWeek, periodsPerDay, flags, levelId) {
-  const candidates = [];
-
-  for (let day = 0; day < daysPerWeek; day++) {
-    for (let period = 0; period < periodsPerDay; period++) {
-      if (!canPlace(task, day, period, state, flags)) continue;
-      candidates.push({
-        day,
-        period,
-        score: scoreSlot(task, day, period, state, daysPerWeek, periodsPerDay),
-      });
-    }
-  }
-
-  if (!candidates.length) return null;
-
-  candidates.sort((a, b) => a.score - b.score || a.day - b.day || a.period - b.period);
-  return { ...candidates[0], levelId };
-}
-
-function tryPlaceTask(task, state, daysPerWeek, periodsPerDay) {
-  const levels = createRelaxationLevels();
-
-  for (const level of levels) {
-    const slot = findBestSlot(task, state, daysPerWeek, periodsPerDay, level.flags, level.id);
-    if (slot) {
-      placeLesson(task, slot.day, slot.period, state, slot.levelId);
-      return true;
-    }
-  }
-
-  return false;
-}
 
 function buildAllSlots(daysPerWeek, periodsPerDay) {
   const slots = [];
@@ -477,22 +441,6 @@ function taskPlacementSeed(task, round, attempt) {
     hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
   }
   return hash;
-}
-
-/** Try every slot in shuffled order — helps place stubborn leftover lessons. */
-function tryPlaceTaskShuffled(task, state, daysPerWeek, periodsPerDay, seed) {
-  const levels = createRelaxationLevels();
-  const shuffled = shuffleSlots(buildAllSlots(daysPerWeek, periodsPerDay), seed);
-
-  for (const level of levels) {
-    for (const { day, period } of shuffled) {
-      if (!canPlace(task, day, period, state, level.flags)) continue;
-      placeLesson(task, day, period, state, level.id === "strict" ? null : level.id);
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function countRelaxedPlacementOptions(task, state, daysPerWeek, periodsPerDay) {
@@ -525,247 +473,14 @@ const PLACEMENT_RETRY_ROUNDS = 32;
 const STAGNANT_ROUNDS_LIMIT = 4;
 const POST_FIXED_PERIOD_RETRY_ROUNDS = 12;
 
-function lessonGroupKey(task) {
-  return `${task.classId}|${task.subject}|${task.teachers.join("\u0001")}`;
-}
 
-function groupInstancesByLesson(instances) {
-  const map = new Map();
-  for (const task of instances) {
-    if (task.invalid) continue;
-    const key = lessonGroupKey(task);
-    if (!map.has(key)) map.set(key, []);
-    map.get(key).push(task);
-  }
-  return [...map.values()];
-}
-
-function distributeIntoParts(total, numParts) {
-  if (numParts < 1 || total < 1) return [];
-  const base = Math.floor(total / numParts);
-  const remainder = total % numParts;
-  const sizes = [];
-  for (let i = 0; i < numParts; i++) {
-    const size = base + (i < remainder ? 1 : 0);
-    if (size > 0) sizes.push(size);
-  }
-  return sizes;
-}
-
-function distributeIntoPartsVariants(total, numParts) {
-  const forward = distributeIntoParts(total, numParts);
-  const reverse = [...forward].reverse();
-  const variants = [];
-  for (const sizes of [forward, reverse]) {
-    const key = sizes.join(",");
-    if (!variants.some((v) => v.join(",") === key)) variants.push(sizes);
-  }
-  return variants;
-}
-
-function combinations(arr, k) {
-  if (k === 0) return [[]];
-  if (k > arr.length) return [];
-  const [first, ...rest] = arr;
-  const withFirst = combinations(rest, k - 1).map((combo) => [first, ...combo]);
-  const withoutFirst = combinations(rest, k);
-  return [...withFirst, ...withoutFirst];
-}
-
-function partitionDaysIntoGroups(daysPerWeek, sizes) {
-  const days = Array.from({ length: daysPerWeek }, (_, i) => i);
-  const results = [];
-
-  function rec(remainingDays, remainingSizes, built) {
-    if (!remainingSizes.length) {
-      results.push(built.map((group) => [...group].sort((a, b) => a - b)));
-      return;
-    }
-    const size = remainingSizes[0];
-    if (size > remainingDays.length) return;
-
-    for (const chosen of combinations(remainingDays, size)) {
-      const chosenSet = new Set(chosen);
-      const rest = remainingDays.filter((d) => !chosenSet.has(d));
-      rec(rest, remainingSizes.slice(1), [...built, chosen]);
-    }
-  }
-
-  rec(days, sizes, []);
-  return results;
-}
-
-function enumeratePeriodTuples(periodsPerDay, numParts) {
-  const results = [];
-  const current = [];
-
-  function rec(depth) {
-    if (depth === numParts) {
-      results.push([...current]);
-      return;
-    }
-    for (let period = 0; period < periodsPerDay; period++) {
-      current.push(period);
-      rec(depth + 1);
-      current.pop();
-    }
-  }
-
-  rec(0);
-  return results;
-}
-
-function canPlaceAll(placements, state, flags) {
-  for (const { task, day, period } of placements) {
-    if (!canPlace(task, day, period, state, flags)) return false;
-  }
-  return true;
-}
-
-/**
- * Split weekly lesson instances into 2–3 parts; each part uses one period on every
- * assigned day (same period across those days).
- */
-function findFixedPeriodPlacement(tasks, state, daysPerWeek, periodsPerDay) {
-  const toPlace = tasks.filter((t) => !t.placed);
-  if (!toPlace.length) return null;
-
-  const count = toPlace.length;
-  const levels = createRelaxationLevels();
-  const partCounts = [2, 3, 1];
-
-  for (const numParts of partCounts) {
-    const sizeVariants = distributeIntoPartsVariants(count, numParts);
-
-    for (const sizes of sizeVariants) {
-      if (!sizes.length || sizes.some((size) => size > daysPerWeek)) continue;
-
-      const dayPartitions = partitionDaysIntoGroups(daysPerWeek, sizes);
-      const periodTuples = enumeratePeriodTuples(periodsPerDay, sizes.length);
-
-      for (const dayGroups of dayPartitions) {
-        for (const periodGroup of periodTuples) {
-          for (const level of levels) {
-            const placements = [];
-            let taskIdx = 0;
-
-            for (let part = 0; part < sizes.length; part++) {
-              const days = dayGroups[part];
-              const period = periodGroup[part];
-              for (let i = 0; i < sizes[part]; i++) {
-                placements.push({
-                  task: toPlace[taskIdx],
-                  day: days[i],
-                  period,
-                });
-                taskIdx++;
-              }
-            }
-
-            if (placements.length !== count) continue;
-            if (!canPlaceAll(placements, state, level.flags)) continue;
-
-            return {
-              placements,
-              levelId: level.id === "strict" ? null : level.id,
-            };
-          }
-        }
-      }
-    }
-  }
-
-  return null;
-}
-
-function applyFixedPeriodPlacement(plan, state) {
-  for (const { task, day, period } of plan.placements) {
-    placeLesson(task, day, period, state, plan.levelId);
-  }
-}
-
-function tryFixedPeriodPlacement(tasks, state, daysPerWeek, periodsPerDay) {
-  const plan = findFixedPeriodPlacement(tasks, state, daysPerWeek, periodsPerDay);
-  if (!plan) return false;
-  applyFixedPeriodPlacement(plan, state);
-  return true;
-}
-
-function retryLessonGroupWithFixedPeriods(group, state, daysPerWeek, periodsPerDay) {
-  const unplaced = group.filter((t) => !t.placed);
-  if (!unplaced.length) return true;
-
-  if (tryFixedPeriodPlacement(unplaced, state, daysPerWeek, periodsPerDay)) {
-    return true;
-  }
-
-  if (unplaced.length < 2) return false;
-
-  const placedInGroup = group.filter((t) => t.placed);
-  if (!placedInGroup.length) {
-    return tryFixedPeriodPlacement(group, state, daysPerWeek, periodsPerDay);
-  }
-
-  const snapshots = group
-    .filter((t) => t.placed)
-    .map((t) => ({ task: t, day: t.placedDay, period: t.placedPeriod }));
-
-  unplaceTasks(group, state);
-
-  const plan = findFixedPeriodPlacement(group, state, daysPerWeek, periodsPerDay);
-  if (plan) {
-    applyFixedPeriodPlacement(plan, state);
-    return true;
-  }
-
-  for (const snap of snapshots) {
-    const levels = createRelaxationLevels();
-    let restored = false;
-    for (const level of levels) {
-      if (canPlace(snap.task, snap.day, snap.period, state, level.flags)) {
-        placeLesson(
-          snap.task,
-          snap.day,
-          snap.period,
-          state,
-          level.id === "strict" ? null : level.id
-        );
-        restored = true;
-        break;
-      }
-    }
-    if (!restored) {
-      tryPlaceTaskShuffled(snap.task, state, daysPerWeek, periodsPerDay, 17);
-    }
-  }
-
-  return false;
-}
-
-/**
- * When many lessons remain unplaced, regroup each subject into fixed-period parts
- * (same period on each day within a part).
- */
-function placeUnplacedWithFixedPeriodStrategy(instances, state, daysPerWeek, periodsPerDay) {
-  const groups = groupInstancesByLesson(instances);
-  let fixedGroupsPlaced = 0;
-
-  for (const group of groups) {
-    const before = group.filter((t) => t.placed).length;
-    if (retryLessonGroupWithFixedPeriods(group, state, daysPerWeek, periodsPerDay)) {
-      const after = group.filter((t) => t.placed).length;
-      if (after > before) fixedGroupsPlaced++;
-    }
-  }
-
-  return fixedGroupsPlaced;
-}
-
-function placeRemainingWithShuffle(instances, state, daysPerWeek, periodsPerDay, attempt) {
+function placeRemainingWithShuffle(instances, state, daysPerWeek, periodsPerDay, runSeed) {
   let stagnantRounds = 0;
 
   for (let round = 0; round < POST_FIXED_PERIOD_RETRY_ROUNDS; round++) {
-    const unplaced = instances.filter((t) => !t.invalid && !t.placed);
+    // Grouped lessons excluded — see the comment on the Phase 4 loop above;
+    // individual placement here would desync a multi-class lesson's classes.
+    const unplaced = instances.filter((t) => !t.invalid && !t.placed && !t.groupId);
     if (!unplaced.length) break;
 
     const queue = sortUnplacedQueue(unplaced, state, daysPerWeek, periodsPerDay);
@@ -773,12 +488,12 @@ function placeRemainingWithShuffle(instances, state, daysPerWeek, periodsPerDay,
 
     for (const task of queue) {
       if (
-        tryPlaceTaskShuffled(
+        tryPlaceTaskRandom(
           task,
           state,
           daysPerWeek,
           periodsPerDay,
-          taskPlacementSeed(task, round + 200, attempt)
+          taskPlacementSeed(task, round + 200, runSeed)
         )
       ) {
         placedThisRound++;
@@ -794,17 +509,248 @@ function placeRemainingWithShuffle(instances, state, daysPerWeek, periodsPerDay,
   }
 }
 
+const GROUP_SWAP_TRIALS = 50;
+
+/**
+ * Every currently-placed card that stands in the way of `task` occupying
+ * (day, period): the task's own class cell, if occupied, PLUS — for a
+ * multi-teacher lesson this is the common real blocker — whoever already
+ * holds any of the task's teachers at that exact slot, in ANY class (a
+ * teacher clash is not limited to the group's own classes).
+ */
+function findBlockingCards(task, day, period, state, instances) {
+  const blockers = new Map(); // keyed by the instance object itself (dedup)
+
+  const classOccupant = instances.find(
+    (t) => t.placed && t.classId === task.classId && t.placedDay === day && t.placedPeriod === period
+  );
+  if (classOccupant) blockers.set(classOccupant, classOccupant);
+
+  for (const teacherName of task.teachers) {
+    if (!state.teacherBusy.has(teacherBusyKey(teacherName, day, period))) continue;
+    const blocker = instances.find(
+      (t) => t.placed && t.placedDay === day && t.placedPeriod === period && t.teachers.includes(teacherName)
+    );
+    if (blocker) blockers.set(blocker, blocker);
+  }
+
+  return [...blockers.values()];
+}
+
+/**
+ * One attempt to fit `group` (every class's task for one weekly occurrence of
+ * a multi-class lesson) into `day`/`period` at relaxation `level`. Collects
+ * every blocking card across every task in the group — including a teacher
+ * who is busy in a completely unrelated class, the actual common blocker for
+ * a lesson shared by many teachers — removes them all at once, then verifies
+ * every task in the group now legally fits. Restores everything and returns
+ * null if not. `allowBumpingRestricted` controls whether a blocker with its
+ * own subject/teacher time-off restriction may be displaced — false on the
+ * first, protective attempt; true only as the guaranteed-placement fallback
+ * once every slot has failed under full protection.
+ */
+function tryGroupSwapPlan(group, instances, state, day, period, level, allowBumpingRestricted) {
+  const blockers = new Map();
+
+  for (const task of group) {
+    if (canPlace(task, day, period, state, level.flags)) continue;
+    for (const blocker of findBlockingCards(task, day, period, state, instances)) {
+      if (blocker.groupId || blocker.fixed) return null;
+      if (!allowBumpingRestricted && (isSubjectRestricted(blocker, state) || isTeacherRestricted(blocker, state))) {
+        return null;
+      }
+      blockers.set(blocker, blocker);
+    }
+  }
+
+  // Capture each blocker's original slot BEFORE removing — removeLesson
+  // clears placedDay/placedPeriod, so they must be saved to restore correctly.
+  const blockerList = [...blockers.values()].map((b) => ({
+    task: b,
+    origDay: b.placedDay,
+    origPeriod: b.placedPeriod,
+  }));
+  for (const { task: blocker } of blockerList) removeLesson(blocker, state);
+
+  const fits = group.every((task) => canPlace(task, day, period, state, level.flags));
+  if (!fits) {
+    // Restore everything exactly as it was — this slot doesn't work.
+    for (const { task: blocker, origDay, origPeriod } of blockerList) {
+      placeLesson(blocker, origDay, origPeriod, state, null);
+    }
+    return null;
+  }
+
+  return blockerList.map((b) => b.task);
+}
+
+function applyGroupSwapPlan(group, day, period, state, levelId) {
+  // Blockers are already removed from the grid by tryGroupSwapPlan's
+  // feasibility check — just place the group's lessons into the freed slot.
+  for (const task of group) {
+    placeLesson(task, day, period, state, levelId);
+  }
+}
+
+/**
+ * Tray-clearing rescue for multi-class (grouped) lessons — most importantly,
+ * ones with a subject/teacher time-off restriction, which must never be left
+ * unplaced. A group occurrence needs the SAME day/period to be legal in every
+ * one of its classes at once, so for each slot tried, every class is checked:
+ * free already, or occupied by a plain, unprotected lesson that can be bumped
+ * out to make room. The whole plan is applied only if every class in the
+ * group can be accommodated — never partially, which would desync the group.
+ *
+ * Two tiers, in order:
+ *  1. Protective — never displaces a fixed lesson, another restricted lesson,
+ *     or another group's lesson.
+ *  2. Guaranteed fallback — only reached if tier 1 fails at EVERY slot. Still
+ *     never touches a fixed or grouped lesson, but may now displace a plain
+ *     restricted lesson too, so the grouped/restricted lesson itself is never
+ *     left stranded in the tray. The displaced lesson re-enters the tray and
+ *     gets its own turn in the single-class rescue right after this.
+ */
+function resolveGroupedTrayBySwapping(instances, state, daysPerWeek, periodsPerDay, runSeed) {
+  const levels = createRelaxationLevels();
+
+  const occurrences = new Map();
+  for (const task of instances) {
+    if (task.invalid || task.placed || !task.groupId) continue;
+    const key = `${task.groupId}|${task.instanceIndex}`;
+    if (!occurrences.has(key)) occurrences.set(key, []);
+    occurrences.get(key).push(task);
+  }
+
+  for (const group of occurrences.values()) {
+    if (group.length < 2 || group.some((t) => t.placed)) continue;
+
+    const slots = shuffleSlots(buildAllSlots(daysPerWeek, periodsPerDay), taskPlacementSeed(group[0], 500, runSeed));
+    let placed = false;
+
+    for (const allowBumpingRestricted of [false, true]) {
+      if (placed) break;
+      for (let trial = 0; trial < GROUP_SWAP_TRIALS && !placed; trial++) {
+        const { day, period } = slots[trial % slots.length];
+
+        for (const level of levels) {
+          // tryGroupSwapPlan already removed every blocking card on success —
+          // only the group's own lessons still need placing.
+          const blockers = tryGroupSwapPlan(group, instances, state, day, period, level, allowBumpingRestricted);
+          if (!blockers) continue;
+          applyGroupSwapPlan(group, day, period, state, level.id === "strict" ? null : level.id);
+          placed = true;
+          break;
+        }
+      }
+    }
+    // Still stuck after both tiers exhaust every slot — a genuine scheduling
+    // impossibility (e.g. the class is already at its weekly period capacity
+    // with no room anywhere), left in the tray like any other.
+  }
+}
+
+const SWAP_TRIALS_PER_CLASS = 60;
+
+/**
+ * Final tray-clearing pass. For each class with leftover (tray) cards:
+ * take each card and look for an occupied slot in that class where the card
+ * could legally sit if the occupant moved out. If found, swap — the tray card
+ * takes the slot and the displaced card goes back into the tray queue, then
+ * gets the same treatment (a direct free slot first, then its own swap).
+ * Repeats until the class's tray is empty or the trial budget runs out, then
+ * moves on to the next class.
+ *
+ * Multi-class (grouped) lessons are excluded on both sides — they must occupy
+ * one shared slot across every class in the group, so single-class swaps
+ * would tear the group apart. Class-teacher period-1 occupants are protected
+ * while that school rule is on.
+ */
+function resolveTrayBySwapping(instances, state, daysPerWeek, periodsPerDay, runSeed) {
+  const levels = createRelaxationLevels();
+  const trayByClass = new Map();
+  for (const task of instances) {
+    if (task.invalid || task.placed || task.groupId) continue;
+    if (!trayByClass.has(task.classId)) trayByClass.set(task.classId, []);
+    trayByClass.get(task.classId).push(task);
+  }
+
+  for (const [classId, queue] of trayByClass) {
+    let trials = 0;
+
+    while (queue.length && trials < SWAP_TRIALS_PER_CLASS) {
+      const task = queue.shift();
+      trials++;
+      if (task.placed) continue;
+
+      // A direct free slot may have opened up since the earlier passes.
+      if (tryPlaceTaskRandom(task, state, daysPerWeek, periodsPerDay, taskPlacementSeed(task, 300 + trials, runSeed))) {
+        continue;
+      }
+
+      // Try to swap into an occupied slot of this class.
+      const slots = shuffleSlots(
+        buildAllSlots(daysPerWeek, periodsPerDay),
+        taskPlacementSeed(task, 400 + trials, runSeed)
+      );
+      let swapped = false;
+
+      for (const level of levels) {
+        for (const { day, period } of slots) {
+          const cell = state.classGrids[classId][day][period];
+          if (!cell) continue;
+
+          // Protect the class teacher's first period while the rule is on.
+          if (period === 0 && state.schoolClassTeacherFirstPeriod) continue;
+
+          const occupant = instances.find(
+            (t) => t.placed && t.classId === classId && t.placedDay === day && t.placedPeriod === period
+          );
+          // Grouped lessons stay put; identical lessons gain nothing by swapping.
+          if (!occupant || occupant.groupId) continue;
+          if (occupant.subject === task.subject && occupant.lessonId === task.lessonId) continue;
+          // Lessons whose subject or teacher has a special time-off window were
+          // deliberately placed in one of their few legal slots — never displace them.
+          if (isSubjectRestricted(occupant, state) || isTeacherRestricted(occupant, state)) continue;
+
+          removeLesson(occupant, state);
+          if (canPlace(task, day, period, state, level.flags)) {
+            placeLesson(task, day, period, state, level.id === "strict" ? null : level.id);
+            queue.push(occupant); // displaced card goes to the tray queue
+            swapped = true;
+            break;
+          }
+          // Not possible — put the occupant back exactly where it was.
+          placeLesson(occupant, day, period, state, null);
+        }
+        if (swapped) break;
+      }
+
+      // No direct slot and no swap — the card stays in the tray; move on.
+    }
+  }
+}
+
 /**
  * Lessons whose subject has restricted time-off slots — place those first
  * (tightest restriction wins) so the few legal slots aren't filled by
  * unrestricted lessons.
  */
-function placeRestrictedSubjectsFirst(instances, state, daysPerWeek, periodsPerDay) {
+function placeRestrictedSubjectsFirst(instances, state, daysPerWeek, periodsPerDay, runSeed) {
+  // Multi-class lessons (task.groupId) must stay out of individual placement —
+  // placeGroupedMultiClassLessons is the only phase allowed to seat them, since
+  // it places every class in the group into one shared slot atomically. Letting
+  // this phase grab just one class's copy (e.g. because a teacher on the team
+  // has restricted time-off) would strand the rest of the group in the tray.
   const targets = instances
-    .filter((t) => !t.placed && isSubjectRestricted(t, state))
+    .filter((t) => !t.placed && !t.groupId && isSubjectRestricted(t, state))
     .sort((a, b) => lessonAvailabilityScore(a, state) - lessonAvailabilityScore(b, state));
   for (const task of targets) {
-    if (!task.placed) tryPlaceTask(task, state, daysPerWeek, periodsPerDay);
+    if (!task.placed) {
+      // Avoid period 1 where possible — it's reserved for the class teacher,
+      // placed right after this phase. Falls back to period 1 only if it's
+      // truly the lesson's sole remaining legal slot.
+      tryPlaceTaskRandom(task, state, daysPerWeek, periodsPerDay, taskPlacementSeed(task, 1, runSeed), 0);
+    }
   }
 }
 
@@ -812,52 +758,130 @@ function placeRestrictedSubjectsFirst(instances, state, daysPerWeek, periodsPerD
  * Same idea for teachers with restricted time-off — place their lessons
  * before the general queue grabs those rare slots.
  */
-function placeRestrictedTeachersFirst(instances, state, daysPerWeek, periodsPerDay) {
+function placeRestrictedTeachersFirst(instances, state, daysPerWeek, periodsPerDay, runSeed) {
+  // Same reasoning as placeRestrictedSubjectsFirst: grouped multi-class lessons
+  // are excluded so a restricted teacher on a co-teaching team can't get their
+  // class's copy placed alone, ahead of the group-coordination phase.
   const targets = instances
-    .filter((t) => !t.placed && isTeacherRestricted(t, state))
+    .filter((t) => !t.placed && !t.groupId && isTeacherRestricted(t, state))
     .sort((a, b) => lessonAvailabilityScore(a, state) - lessonAvailabilityScore(b, state));
   for (const task of targets) {
-    if (!task.placed) tryPlaceTask(task, state, daysPerWeek, periodsPerDay);
+    if (!task.placed) {
+      tryPlaceTaskRandom(task, state, daysPerWeek, periodsPerDay, taskPlacementSeed(task, 2, runSeed));
+    }
   }
 }
 
-/**
- * Place lessons in repeated passes until nothing new fits or rounds exhaust.
- * Remaining instances are left for the tray.
- */
-function placeAllWithRetryLoop(instances, state, classes, teachers, daysPerWeek, periodsPerDay, attempt) {
-  placeClassTeacherFirstPeriods(instances, state, classes, teachers, daysPerWeek);
-  placeRestrictedSubjectsFirst(instances, state, daysPerWeek, periodsPerDay);
-  placeRestrictedTeachersFirst(instances, state, daysPerWeek, periodsPerDay);
+/** True when this class already has the task's subject sitting in `period` on some other day. */
+function periodAlreadyUsedForSubject(task, period, state) {
+  const grid = state.classGrids[task.classId];
+  for (let d = 0; d < state.daysPerWeek; d++) {
+    if (grid[d][period]?.subject === task.subject) return true;
+  }
+  return false;
+}
 
+/**
+ * Place a single lesson into a random free slot, preferring a period that
+ * this subject doesn't already occupy on another day (so a subject doesn't
+ * settle into the same period every day). Falls back through the same
+ * constraint-relaxation ladder as the other placement helpers.
+ */
+function tryPlaceTaskRandom(task, state, daysPerWeek, periodsPerDay, seed, excludePeriod) {
+  const levels = createRelaxationLevels();
+  const shuffled = shuffleSlots(buildAllSlots(daysPerWeek, periodsPerDay), seed);
+
+  for (const level of levels) {
+    let candidates = shuffled.filter(({ day, period }) => canPlace(task, day, period, state, level.flags));
+    if (excludePeriod != null) {
+      const withoutExcluded = candidates.filter(({ period }) => period !== excludePeriod);
+      if (withoutExcluded.length) candidates = withoutExcluded;
+    }
+    if (!candidates.length) continue;
+
+    const fresh = candidates.filter(({ period }) => !periodAlreadyUsedForSubject(task, period, state));
+    const pick = (fresh.length ? fresh : candidates)[0];
+    placeLesson(task, pick.day, pick.period, state, level.id === "strict" ? null : level.id);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Place every class's lessons together, in passes, rather than finishing one
+ * class before starting the next:
+ *   1. Subjects with a restricted time-off window, every class.
+ *   2. Class teacher lesson at period 1, every class.
+ *   3. Teachers with a restricted time-off window, every class.
+ *   4. Everything left over — random free slot, avoiding repeating the same
+ *      period for a subject across days — repeated in passes until nothing
+ *      new fits or rounds exhaust. Leftovers fall through to the tray.
+ */
+function placeAllWithRetryLoop(instances, state, classes, teachers, daysPerWeek, periodsPerDay, runSeed, classLessonsMap) {
+  // Computed up front: groups that are themselves a class teacher's subject —
+  // these must go through placeGroupedClassTeacherFirstPeriods (period 1,
+  // priority) rather than being grabbed by an earlier any-period pass.
+  const ctGroupIds = collectClassTeacherGroupIds(classes, teachers, classLessonsMap);
+
+  // Phase 0: multi-class (grouped) lessons whose subject or teachers have a
+  // restricted time-off window — placed before EVERYTHING else EXCEPT the
+  // class teacher's own group subjects (excluded here, handled in Phase 2a).
+  // A group needs one shared slot legal across all its classes at once; if
+  // other lessons claim those few slots first, the whole group lands in the tray.
+  placeGroupedMultiClassLessons(instances, state, daysPerWeek, periodsPerDay, runSeed, true, ctGroupIds);
+
+  // Phase 1: every multi-class lesson's first weekly occurrence claims period 1
+  // on the earliest day it can, across all of its classes at once — before each
+  // class's own class teacher gets a turn at period 1. The class teacher phase
+  // right after this naturally skips whatever day got claimed here (its grid
+  // slot is already filled) and fills period 1 on the remaining days instead.
+  placeGroupSharedFirstOccurrencePeriod(instances, state, daysPerWeek);
+
+  // Phase 2: class teacher's subject into period 1 — one lesson per day, up to
+  // min(lessonsPerWeek, daysPerWeek). Runs BEFORE the restricted-subjects pass
+  // below so a scarce-slot subject can never steal a period-1 day the class
+  // teacher's own subject still needed; any day left over (because the subject
+  // has fewer lessons than there are school days) is simply not claimed here,
+  // so the next phases are free to fill it with another subject.
+  placeClassTeacherFirstPeriods(instances, state, classes, teachers, daysPerWeek, classLessonsMap);
+
+  // Phase 2a: class teacher subjects that are themselves a multi-class lesson —
+  // one weekly occurrence per day, period 1, across every class in the group at once.
+  placeGroupedClassTeacherFirstPeriods(instances, state, daysPerWeek, ctGroupIds);
+
+  // Phase 2b: multi-class lessons (one teacher/team teaching the same subject to
+  // several classes at once) — locked into a shared slot before anything else competes for it.
+  placeGroupedMultiClassLessons(instances, state, daysPerWeek, periodsPerDay, runSeed);
+
+  // Phase 3: subject time-off restricted lessons, all classes together — their
+  // few legal slots are claimed before the general queue grabs them. Runs after
+  // the class-teacher phases above so it can only use period 1 on days the
+  // class teacher's own subject left unclaimed.
+  placeRestrictedSubjectsFirst(instances, state, daysPerWeek, periodsPerDay, runSeed);
+
+  // Phase 3b: teacher time-off restricted lessons, all classes together.
+  placeRestrictedTeachersFirst(instances, state, daysPerWeek, periodsPerDay, runSeed);
+
+  // Phase 4: remaining SINGLE-CLASS lessons, random slot, all classes together.
+  // Grouped (multi-class) lessons are excluded — placing one class's copy
+  // individually here, uncoordinated with the rest of the group, would desync
+  // it from its sibling classes. Phase 2b already gave every group an
+  // exhaustive any-slot attempt; resolveGroupedTrayBySwapping (after this
+  // function returns) is the group-aware rescue for anything still stuck.
   let stagnantRounds = 0;
 
   for (let round = 0; round < PLACEMENT_RETRY_ROUNDS; round++) {
-    const unplaced = instances.filter((t) => !t.placed);
+    const unplaced = instances.filter((t) => !t.placed && !t.groupId);
     if (!unplaced.length) break;
-
-    const useShuffle = round >= 1;
-    const queue =
-      round >= 2
-        ? sortUnplacedQueue(unplaced, state, daysPerWeek, periodsPerDay)
-        : sortInstancesForPlacement(instances, attempt + round, state);
 
     let placedThisRound = 0;
 
-    for (const task of queue) {
+    for (const task of unplaced) {
       if (task.placed) continue;
-
-      const placed = useShuffle
-        ? tryPlaceTaskShuffled(
-            task,
-            state,
-            daysPerWeek,
-            periodsPerDay,
-            taskPlacementSeed(task, round, attempt)
-          )
-        : tryPlaceTask(task, state, daysPerWeek, periodsPerDay);
-
-      if (placed) placedThisRound++;
+      if (tryPlaceTaskRandom(task, state, daysPerWeek, periodsPerDay, taskPlacementSeed(task, round, runSeed))) {
+        placedThisRound++;
+      }
     }
 
     if (placedThisRound === 0) {
@@ -914,6 +938,8 @@ function buildLessonInstances(classes, classLessonsMap, teachers) {
         continue;
       }
 
+      const groupId = row.groupId || null;
+
       for (let i = 0; i < count; i++) {
         instances.push({
           invalid: false,
@@ -924,6 +950,7 @@ function buildLessonInstances(classes, classLessonsMap, teachers) {
           teachers: teachersForLesson,
           lessonId: row.id || `${cls.id}-${subject}-${i}`,
           instanceIndex: i,
+          groupId,
         });
       }
     }
@@ -932,10 +959,85 @@ function buildLessonInstances(classes, classLessonsMap, teachers) {
   return instances;
 }
 
+/**
+ * A multi-class lesson row (row.groupId set, mirrored into every class in the
+ * group by propagateMultiClassLessons) must land on the same day/period in
+ * every class — the same teacher(s) teach all those classes simultaneously.
+ * Each weekly occurrence (matched by instanceIndex) across the group's classes
+ * is placed together, or not at all, into a single shared slot.
+ */
+function placeGroupedMultiClassLessons(instances, state, daysPerWeek, periodsPerDay, attempt, onlyRestricted = false, excludeGroupIds = null) {
+  const groups = new Map();
+  for (const task of instances) {
+    if (task.invalid || task.placed || !task.groupId) continue;
+    // excludeGroupIds: groups that are themselves a class teacher's subject —
+    // reserved for placeGroupedClassTeacherFirstPeriods, which must get the
+    // first claim on period 1 before this (any-period) pass can place them.
+    if (excludeGroupIds?.has(task.groupId)) continue;
+    // onlyRestricted: the early phase for groups whose subject or teachers
+    // have a time-off window — their few legal slots must be claimed before
+    // anything else fills them.
+    if (
+      onlyRestricted &&
+      !(isSubjectRestricted(task, state) || isTeacherRestricted(task, state))
+    ) {
+      continue;
+    }
+    const key = `${task.groupId}|${task.instanceIndex}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(task);
+  }
+
+  for (const group of groups.values()) {
+    if (group.length < 2 || group.some((t) => t.placed)) continue;
+
+    const levels = createRelaxationLevels();
+    let placed = false;
+
+    for (const level of levels) {
+      for (let day = 0; day < daysPerWeek && !placed; day++) {
+        for (let period = 0; period < periodsPerDay && !placed; period++) {
+          const placements = group.map((task) => ({ task, day, period }));
+          if (canPlaceAll(placements, state, level.flags)) {
+            for (const { task, day: d, period: p } of placements) {
+              placeLesson(task, d, p, state, level.id === "strict" ? null : level.id);
+            }
+            placed = true;
+          }
+        }
+      }
+    }
+
+    if (!placed) {
+      const shuffled = shuffleSlots(
+        buildAllSlots(daysPerWeek, periodsPerDay),
+        taskPlacementSeed(group[0], 77, attempt)
+      );
+      outer: for (const level of createRelaxationLevels()) {
+        for (const { day, period } of shuffled) {
+          const placements = group.map((task) => ({ task, day, period }));
+          if (canPlaceAll(placements, state, level.flags)) {
+            for (const { task, day: d, period: p } of placements) {
+              placeLesson(task, d, p, state, level.id === "strict" ? null : level.id);
+            }
+            break outer;
+          }
+        }
+      }
+    }
+  }
+}
+
 function findClassTeacherLessonIndex(instances, classId, classTeacher) {
   const { teacherName, subject } = classTeacher;
 
-  let idx = instances.findIndex(
+  // Match on subject, strictly. The class-teacher-first-period rule is about
+  // the class teacher's designated SUBJECT occupying period 1 — up to its
+  // lessons-per-week, one per day. Once those instances are placed, period 1
+  // on any remaining day is left open for the general queue to fill with
+  // another subject (never forced to a different subject by this same
+  // teacher, which would go beyond the rule).
+  return instances.findIndex(
     (t) =>
       !t.invalid &&
       !t.placed &&
@@ -943,21 +1045,81 @@ function findClassTeacherLessonIndex(instances, classId, classTeacher) {
       t.teachers.includes(teacherName) &&
       t.subject === subject
   );
-  if (idx >= 0) return idx;
-
-  idx = instances.findIndex(
-    (t) => !t.invalid && !t.placed && t.classId === classId && t.teachers.includes(teacherName)
-  );
-  return idx;
 }
 
-/** Class teacher (from Teachers DB) is placed in period 1 every school day for their class. */
-function placeClassTeacherFirstPeriods(instances, state, classes, teachers, daysPerWeek) {
+/**
+ * Every multi-class lesson's first weekly occurrence (instanceIndex 0) gets
+ * one shot at period 1 on the earliest day that works for every class in its
+ * group simultaneously — tried day by day, strict first then relaxed. This
+ * runs before the per-class "class teacher" phase so a shared lesson (taught
+ * to several classes at once) doesn't lose period 1 to whichever individual
+ * class teacher subject happens to also want it; the class-teacher phase then
+ * fills period 1 on the remaining days for each class's own subject.
+ */
+function placeGroupSharedFirstOccurrencePeriod(instances, state, daysPerWeek) {
+  const groups = new Map();
+  for (const task of instances) {
+    if (task.invalid || task.placed || !task.groupId || task.instanceIndex !== 0) continue;
+    if (!groups.has(task.groupId)) groups.set(task.groupId, []);
+    groups.get(task.groupId).push(task);
+  }
+
   const levels = createRelaxationLevels();
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+
+    let placed = false;
+    for (let day = 0; day < daysPerWeek && !placed; day++) {
+      for (const level of levels) {
+        const placements = group.map((task) => ({ task, day, period: 0 }));
+        if (canPlaceAll(placements, state, level.flags)) {
+          for (const { task, period } of placements) {
+            placeLesson(task, day, period, state, level.id === "strict" ? null : level.id);
+          }
+          placed = true;
+          break;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Class teacher is placed in period 1 every school day for every class.
+ * This is the highest-priority placement: it runs before anything else is on
+ * the grid, so the only thing that can legitimately block it is the same
+ * teacher already being claimed as period-1 class teacher for another class
+ * on that same day. Soft constraints (daily/consecutive limits, subject or
+ * teacher time-off) are progressively relaxed, then force-placed as a last
+ * resort, so a class is never silently left without its period-1 lesson.
+ */
+function collectClassTeacherGroupIds(classes, teachers, classLessonsMap) {
+  const groupIds = new Set();
+  for (const cls of classes) {
+    const ct = findClassTeacherForClass(teachers, cls, classLessonsMap);
+    if (ct?.groupId) groupIds.add(ct.groupId);
+  }
+  return groupIds;
+}
+
+function placeClassTeacherFirstPeriods(instances, state, classes, teachers, daysPerWeek, classLessonsMap) {
+  const levels = createRelaxationLevels();
+  const forceFlags = {
+    ignoreClassTeacherFirst: true,
+    ignoreMaxPerDay: true,
+    ignoreMaxConsecutive: true,
+    ignoreSubjectAvailability: true,
+    ignoreTeacherAvailability: true,
+  };
 
   for (const cls of classes) {
-    const ct = findClassTeacherForClass(teachers, cls);
+    const ct = findClassTeacherForClass(teachers, cls, classLessonsMap);
     if (!ct) continue;
+    // Class teacher subjects that are themselves a multi-class lesson (taught
+    // simultaneously to several classes) are handled by
+    // placeGroupedClassTeacherFirstPeriods instead — grabbing one instance
+    // here, for this class alone, would desync it from the rest of the group.
+    if (ct.groupId) continue;
 
     for (let day = 0; day < daysPerWeek; day++) {
       if (state.classGrids[cls.id][day][0]) continue;
@@ -971,7 +1133,6 @@ function placeClassTeacherFirstPeriods(instances, state, classes, teachers, days
       for (const level of levels) {
         if (canPlace(task, day, 0, state, level.flags)) {
           placeLesson(task, day, 0, state, level.id === "strict" ? null : level.id);
-          task.placed = true;
           task.isClassTeacherSlot = true;
           placed = true;
           if (level.id !== "strict") {
@@ -981,30 +1142,67 @@ function placeClassTeacherFirstPeriods(instances, state, classes, teachers, days
         }
       }
 
-      if (!placed && state.schoolClassTeacherFirstPeriod) {
+      // Last resort: force past subject/teacher time-off restrictions too.
+      // Only a genuine same-teacher double-booking (areTeachersFree) can still block this.
+      if (!placed && canPlace(task, day, 0, state, forceFlags)) {
+        placeLesson(task, day, 0, state, "relaxClassTeacherFirst");
+        task.isClassTeacherSlot = true;
         state.relaxationsUsed.classTeacherFirstPeriod += 1;
       }
     }
   }
 }
 
-function sortInstancesForPlacement(instances, attempt = 0, state = null) {
-  const list = instances
-    .filter((t) => !t.invalid && !t.placed)
-    .sort((a, b) => {
-      if (state) {
-        const availDiff = lessonAvailabilityScore(a, state) - lessonAvailabilityScore(b, state);
-        if (availDiff !== 0) return availDiff;
+/**
+ * Class teacher subjects that are also a multi-class lesson (the same teacher
+ * teaching several classes together) — placed one weekly occurrence per day,
+ * at period 1, across every class in the group simultaneously. If a day's
+ * period 1 can't fit the whole group, that occurrence rolls over and tries
+ * again on the next day — it never collides with whatever already took that
+ * slot, and it never strands the other classes in the group the way grabbing
+ * a single class's instance would. Anything still unplaced after this is
+ * picked up by the regular placeGroupedMultiClassLessons pass (any period).
+ */
+function placeGroupedClassTeacherFirstPeriods(instances, state, daysPerWeek, ctGroupIds) {
+  if (!ctGroupIds || !ctGroupIds.size) return;
+  const levels = createRelaxationLevels();
+
+  for (const groupId of ctGroupIds) {
+    const byIndex = new Map();
+    for (const task of instances) {
+      if (task.invalid || task.placed || task.groupId !== groupId) continue;
+      if (!byIndex.has(task.instanceIndex)) byIndex.set(task.instanceIndex, []);
+      byIndex.get(task.instanceIndex).push(task);
+    }
+    const occurrences = [...byIndex.values()].filter((g) => g.length >= 2);
+    if (!occurrences.length) continue;
+
+    let occIdx = 0;
+    for (let day = 0; day < daysPerWeek && occIdx < occurrences.length; day++) {
+      const group = occurrences[occIdx];
+      if (group.some((t) => t.placed)) {
+        occIdx++;
+        continue;
       }
-      const teacherDiff = b.teachers.length - a.teachers.length;
-      if (teacherDiff !== 0) return teacherDiff;
-      return a.classLabel.localeCompare(b.classLabel) || a.subject.localeCompare(b.subject);
-    });
 
-  if (!list.length || attempt === 0) return list;
+      let placedToday = false;
+      for (const level of levels) {
+        const placements = group.map((task) => ({ task, day, period: 0 }));
+        if (canPlaceAll(placements, state, level.flags)) {
+          for (const { task, period } of placements) {
+            placeLesson(task, day, period, state, level.id === "strict" ? null : level.id);
+            task.isClassTeacherSlot = true;
+          }
+          placedToday = true;
+          break;
+        }
+      }
 
-  const offset = attempt % list.length;
-  return [...list.slice(offset), ...list.slice(0, offset)];
+      if (placedToday) occIdx++;
+      // else: today's period 1 is unavailable for the whole group — leave this
+      // occurrence for the next day rather than forcing a conflict.
+    }
+  }
 }
 
 function scoreGenerationOutcome({ unassignedCount, relaxationsUsed, placedCount, totalInstances }) {
@@ -1042,12 +1240,33 @@ function runOneGeneration(data, attempt = 0) {
     constraints,
   });
 
-  placeAllWithRetryLoop(instances, state, classes, teachers, daysPerWeek, periodsPerDay, attempt);
+  // A fresh random seed each run — not derived from the data — so the
+  // "random free slot" placement actually differs between Generate clicks
+  // instead of reproducing the same layout every time.
+  const runSeed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff) ^ (attempt * 2654435761)) >>> 0;
+
+  placeAllWithRetryLoop(instances, state, classes, teachers, daysPerWeek, periodsPerDay, runSeed, classLessonsMap);
 
   const unplacedAfterMain = instances.filter((t) => !t.placed).length;
   if (unplacedAfterMain > 0) {
-    placeUnplacedWithFixedPeriodStrategy(instances, state, daysPerWeek, periodsPerDay);
-    placeRemainingWithShuffle(instances, state, daysPerWeek, periodsPerDay, attempt);
+    // Keep trying random free slots only — never fall back to a fixed
+    // same-period-every-day pattern, which would also re-home lessons that
+    // were already placed correctly.
+    placeRemainingWithShuffle(instances, state, daysPerWeek, periodsPerDay, runSeed);
+  }
+
+  // Rescue pass for multi-class (grouped) lessons still stuck in the tray —
+  // tries every slot, swapping out a plain occupant across every class in the
+  // group at once if needed. Runs first so any single-class card it displaces
+  // gets picked up by the single-class rescue right after.
+  if (instances.some((t) => !t.placed && t.groupId)) {
+    resolveGroupedTrayBySwapping(instances, state, daysPerWeek, periodsPerDay, runSeed);
+  }
+
+  // Final pass: clear the tray by swapping leftover cards into occupied slots
+  // (the displaced card re-enters the tray and gets its own turn).
+  if (instances.some((t) => !t.placed)) {
+    resolveTrayBySwapping(instances, state, daysPerWeek, periodsPerDay, runSeed);
   }
 
   const unassigned = [];
@@ -1057,6 +1276,9 @@ function runOneGeneration(data, attempt = 0) {
         classLabel: task.classLabel,
         subject: task.subject,
         teachers: task.teachers,
+        lessonId: task.lessonId,
+        groupId: task.groupId || null,
+        instanceIndex: task.instanceIndex,
         reason: "No free slot found after retry and fixed-period passes — placed in lesson tray.",
       });
     }
@@ -1239,7 +1461,7 @@ export function validateTimetableInputs() {
   };
 }
 
-export const GENERATION_ATTEMPTS = 10;
+export const GENERATION_ATTEMPTS = 1;
 
 function trayCountFromResult(result) {
   return result?.timetable?.tray?.length ?? result?.stats?.unassignedCount ?? 0;

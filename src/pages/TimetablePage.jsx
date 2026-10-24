@@ -10,7 +10,18 @@ import { useGenerateTimetable } from "../hooks/useGenerateTimetable";
 import { buildPrintData } from "../lib/printTimetable";
 import { countTeacherLessons, listTeachersForView } from "../lib/teacherTimetableView";
 import { getAllottedLessonsPerWeek, getSchoolPeriodsPerWeek, removeCardToTray, toggleCardFixed } from "../lib/timetableValidation";
-import { loadGeneratedTimetable, saveGeneratedTimetable } from "../lib/timetableStorage";
+import {
+  listSavedTimetables,
+  loadGeneratedTimetable,
+  saveGeneratedTimetable,
+  saveTimetableAs,
+  updateSavedTimetable,
+} from "../lib/timetableStorage";
+import { getCurrentUser } from "../lib/authStorage";
+import { flushPendingSyncs } from "../lib/userDataStorage";
+
+// How many named timetables each plan can keep.
+const SAVE_LIMITS = { free: 1, pro: 3, prime: Infinity };
 import "../App.css";
 
 function classDisplayLabel(cls) {
@@ -44,6 +55,11 @@ export default function TimetablePage() {
   const [printJob, setPrintJob] = useState(null);
   const [classSearchQuery, setClassSearchQuery] = useState("");
   const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
+  // Named saves: text box + Save/Load; edits auto-save to the active name.
+  const [ttName, setTtName] = useState("");
+  const [savedTimetables, setSavedTimetables] = useState(() => listSavedTimetables());
+  const [loadSelection, setLoadSelection] = useState("");
+  const [activeSavedName, setActiveSavedName] = useState("");
 
   const loadTimetable = useCallback(() => {
     const loaded = loadGeneratedTimetable();
@@ -73,7 +89,11 @@ export default function TimetablePage() {
     };
     setTimetable(withMeta);
     saveGeneratedTimetable(withMeta);
-  }, [timetable]);
+    // Any change also updates the named save this timetable was saved/loaded as.
+    if (activeSavedName) {
+      setSavedTimetables(updateSavedTimetable(activeSavedName, withMeta));
+    }
+  }, [timetable, activeSavedName]);
 
   const handleGenerated = useCallback((generated) => {
     setTimetable(generated);
@@ -82,7 +102,58 @@ export default function TimetablePage() {
     setViewMode("class");
     setWarning("");
     setDraggingCardId(null);
+    // A fresh generation is not linked to any named save until "Save" is clicked.
+    setActiveSavedName("");
   }, []);
+
+  const handleSaveAs = useCallback(() => {
+    if (!timetable) {
+      alert("Generate a timetable first.");
+      return;
+    }
+    const name = ttName.trim();
+    if (!name) {
+      alert("Enter a name for the timetable before saving.");
+      return;
+    }
+    const replacing = savedTimetables.some((e) => e.name.toLowerCase() === name.toLowerCase());
+
+    // Plan limit: free = 1, pro = 3, prime = unlimited (overwrites don't count).
+    if (!replacing) {
+      const userType = getCurrentUser()?.userType || "free";
+      const limit = SAVE_LIMITS[userType] ?? SAVE_LIMITS.free;
+      if (savedTimetables.length >= limit) {
+        const planName = userType === "pro" ? "Pro" : "Free";
+        const upgradeTo = userType === "pro" ? "Prime for unlimited saved timetables" : "Pro (3 timetables) or Prime (unlimited)";
+        alert(
+          `⚠ Your ${planName} plan allows only ${limit} saved timetable${limit > 1 ? "s" : ""}.\n\n` +
+            `Upgrade to ${upgradeTo}, or overwrite an existing save by using its exact name.`
+        );
+        return;
+      }
+    }
+
+    setSavedTimetables(saveTimetableAs(name, timetable));
+    flushPendingSyncs();
+    setActiveSavedName(name);
+    alert(replacing ? `Timetable "${name}" updated.` : `Timetable "${name}" saved. Further changes will be saved to it automatically.`);
+  }, [timetable, ttName, savedTimetables]);
+
+  const handleLoadSaved = useCallback(() => {
+    const entry = savedTimetables.find((e) => e.id === loadSelection);
+    if (!entry) {
+      alert("Select a saved timetable to load.");
+      return;
+    }
+    setTimetable(entry.timetable);
+    saveGeneratedTimetable(entry.timetable);
+    setTtName(entry.name);
+    setActiveSavedName(entry.name);
+    setClassIndex(0);
+    setTeacherIndex(0);
+    setViewMode("class");
+    setWarning("");
+  }, [savedTimetables, loadSelection]);
 
   const {
     initialCheck,
@@ -94,7 +165,6 @@ export default function TimetablePage() {
     generationMeta,
     runGenerate,
     relaxationText,
-    placedOnGrid,
   } = useGenerateTimetable(handleGenerated);
 
   const teachers = useMemo(() => listTeachersForView(timetable), [timetable]);
@@ -311,6 +381,42 @@ export default function TimetablePage() {
                 Print
               </button>
             </>
+          )}
+        </div>
+
+        {/* Named save / load */}
+        <div className="tt-save-row">
+          <input
+            type="text"
+            className="field-input tt-save-row__name"
+            value={ttName}
+            onChange={(e) => setTtName(e.target.value)}
+            placeholder="Timetable name"
+          />
+          <button type="button" className="btn btn-primary btn--sm" onClick={handleSaveAs}>
+            Save
+          </button>
+          {savedTimetables.length > 0 && (
+            <>
+              <select
+                className="subst-select tt-save-row__select"
+                value={loadSelection}
+                onChange={(e) => setLoadSelection(e.target.value)}
+              >
+                <option value="">Saved timetables…</option>
+                {savedTimetables.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name} ({e.savedAt ? new Date(e.savedAt).toLocaleDateString("en-IN") : ""})
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn btn-outline btn--sm" onClick={handleLoadSaved}>
+                Load
+              </button>
+            </>
+          )}
+          {activeSavedName && (
+            <span className="field-hint">Auto-saving changes to “{activeSavedName}”</span>
           )}
         </div>
 
@@ -575,8 +681,8 @@ export default function TimetablePage() {
 
         <TimetableGenerateSummary
           lastResult={lastResult}
+          timetable={timetable}
           relaxationText={relaxationText}
-          placedOnGrid={placedOnGrid}
           generationMeta={generationMeta}
         />
       </section>

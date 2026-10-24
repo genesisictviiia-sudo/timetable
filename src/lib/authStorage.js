@@ -1,208 +1,106 @@
-import { sendPasswordResetEmail } from "./sendResetEmail";
-import { onUserSessionStarted } from "./userDataStorage";
+import { sendPasswordResetEmail, sendSignupOtpEmail } from "./sendResetEmail";
+import { api, setToken, getToken } from "./apiClient";
+import { onUserSessionStarted, hydrateFromApi } from "./userDataStorage";
 
-const USERS_KEY = "subst.auth.users";
 const SESSION_KEY = "subst.auth.session";
-const RESET_KEY = "subst.auth.resetCodes";
-const RESET_TTL_MS = 15 * 60 * 1000;
 
-function readJson(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
+function readSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
 }
 
-function writeJson(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
-}
-
-async function hashPassword(password, salt) {
-  const enc = new TextEncoder();
-  const data = enc.encode(`${salt}::${password}`);
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function randomSalt() {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-export function getAllUsers() {
-  return readJson(USERS_KEY, {});
-}
-
-export function getSession() {
-  return readJson(SESSION_KEY, null);
+function writeSession(session) {
+  if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  else localStorage.removeItem(SESSION_KEY);
 }
 
 export function getCurrentUser() {
-  const session = getSession();
+  if (!getToken()) return null;
+  const session = readSession();
   if (!session?.email) return null;
-  const users = getAllUsers();
-  const record = users[session.email];
-  if (!record) return null;
-  return { email: session.email, profile: record.profile || {} };
+  return session;
 }
 
-export async function signup({ email, password, name }) {
-  const normalized = normalizeEmail(email);
-  if (!normalized) throw new Error("Email is required.");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
-    throw new Error("Please enter a valid email address.");
-  }
-  if (!password || password.length < 6) {
-    throw new Error("Password must be at least 6 characters.");
-  }
-  const users = getAllUsers();
-  if (users[normalized]) throw new Error("An account with this email already exists.");
-  const salt = randomSalt();
-  const hash = await hashPassword(password, salt);
-  users[normalized] = {
-    salt,
-    hash,
-    profile: {
-      name: name?.trim() || "",
-      role: "",
-      school: "",
-      createdAt: new Date().toISOString(),
-    },
-  };
-  writeJson(USERS_KEY, users);
-  writeJson(SESSION_KEY, { email: normalized, startedAt: Date.now() });
-  onUserSessionStarted(normalized, { isNewAccount: true });
-  return { email: normalized, profile: users[normalized].profile };
-}
-
-export async function login({ email, password }) {
-  const normalized = normalizeEmail(email);
-  const users = getAllUsers();
-  const record = users[normalized];
-  if (!record) throw new Error("No account found with that email.");
-  const hash = await hashPassword(password, record.salt);
-  if (hash !== record.hash) throw new Error("Incorrect password.");
-  writeJson(SESSION_KEY, { email: normalized, startedAt: Date.now() });
-  onUserSessionStarted(normalized, { isNewAccount: false });
-  return { email: normalized, profile: record.profile };
-}
-
-export function logout() {
-  localStorage.removeItem(SESSION_KEY);
-}
-
-export function updateProfile(patch) {
-  const session = getSession();
-  if (!session?.email) throw new Error("Not signed in.");
-  const users = getAllUsers();
-  const record = users[session.email];
-  if (!record) throw new Error("Account no longer exists.");
-  record.profile = { ...record.profile, ...patch };
-  writeJson(USERS_KEY, users);
-  return { email: session.email, profile: record.profile };
-}
-
-export async function setPasswordForCurrentUser({ newPassword }) {
-  const session = getSession();
-  if (!session?.email) throw new Error("Not signed in.");
-  if (!newPassword || newPassword.length < 6) {
-    throw new Error("New password must be at least 6 characters.");
-  }
-  const users = getAllUsers();
-  const record = users[session.email];
-  if (!record) throw new Error("Account no longer exists.");
-  const salt = randomSalt();
-  record.salt = salt;
-  record.hash = await hashPassword(newPassword, salt);
-  writeJson(USERS_KEY, users);
-}
-
-export async function changePassword({ currentPassword, newPassword }) {
-  const session = getSession();
-  if (!session?.email) throw new Error("Not signed in.");
-  const users = getAllUsers();
-  const record = users[session.email];
-  if (!record) throw new Error("Account no longer exists.");
-  const currentHash = await hashPassword(currentPassword, record.salt);
-  if (currentHash !== record.hash) throw new Error("Current password is incorrect.");
-  if (!newPassword || newPassword.length < 6) {
-    throw new Error("New password must be at least 6 characters.");
-  }
-  const salt = randomSalt();
-  record.salt = salt;
-  record.hash = await hashPassword(newPassword, salt);
-  writeJson(USERS_KEY, users);
-}
-
-function generateResetCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+export function getSession() {
+  return readSession();
 }
 
 /**
- * Request a password reset code and email it to the user.
- * From: admin.campusscheduler@gmail.com (via EmailJS) → To: entered email.
+ * Step 1 of signup: call the backend to validate + generate OTP,
+ * then send it via EmailJS. Returns { email, userId, emailDelivered, otp }.
  */
-export async function requestPasswordReset(email) {
-  const normalized = normalizeEmail(email);
-  if (!normalized) throw new Error("Email is required.");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
-    throw new Error("Please enter a valid email address.");
-  }
-  const users = getAllUsers();
-  if (!users[normalized]) throw new Error("No account found with that email.");
-
-  const code = generateResetCode();
-  const resets = readJson(RESET_KEY, {});
-  resets[normalized] = { code, expiresAt: Date.now() + RESET_TTL_MS };
-  writeJson(RESET_KEY, resets);
-
-  const mailResult = await sendPasswordResetEmail(normalized, code);
-
+export async function initiateSignup({ userId, email, password, confirmPassword }) {
+  const data = await api.post("/auth/initiate-signup", { userId, email, password, confirmPassword }, false);
+  // data.otp is returned by the backend so we can send it via EmailJS
+  const mailResult = await sendSignupOtpEmail(data.email, userId, data.otp);
   return {
-    email: normalized,
-    code,
+    email: data.email,
+    userId,
+    emailDelivered: mailResult.delivered,
+    emailError: mailResult.detail || null,
+    otp: data.otp,
+  };
+}
+
+/**
+ * Step 2 of signup: verify OTP on the backend, get JWT, start session.
+ */
+export async function verifySignupOtp({ email, otp }) {
+  const data = await api.post("/auth/verify-signup", { email, otp }, false);
+  setToken(data.token);
+  const session = { email: data.user.email, userId: data.user.userId, userType: data.user.userType || "free", profile: data.user.profile || {} };
+  writeSession(session);
+  await hydrateFromApi();
+  onUserSessionStarted(data.user.email, { isNewAccount: true });
+  return session;
+}
+
+export async function login({ userId, password }) {
+  const data = await api.post("/auth/login", { userId, password }, false);
+  setToken(data.token);
+  const session = { email: data.user.email, userId: data.user.userId, userType: data.user.userType || "free", profile: data.user.profile || {} };
+  writeSession(session);
+  await hydrateFromApi();
+  onUserSessionStarted(data.user.email, { isNewAccount: false });
+  return session;
+}
+
+export function logout() {
+  setToken(null);
+  writeSession(null);
+}
+
+export function updateProfile(patch) {
+  // Optimistic local update; async sync to backend
+  const session = readSession();
+  if (!session) throw new Error("Not signed in.");
+  const updated = { ...session, profile: { ...session.profile, ...patch } };
+  writeSession(updated);
+  api.patch("/auth/profile", { name: patch.name, role: patch.role, school: patch.school }).catch(console.warn);
+  return updated;
+}
+
+export async function setPasswordForCurrentUser({ newPassword }) {
+  await api.post("/auth/set-password", { newPassword });
+}
+
+export async function changePassword({ currentPassword, newPassword }) {
+  await api.post("/auth/change-password", { currentPassword, newPassword });
+}
+
+export async function requestPasswordReset(email) {
+  const data = await api.post("/auth/request-reset", { email }, false);
+  const mailResult = await sendPasswordResetEmail(data.email, data.code);
+  return {
+    email: data.email,
+    code: data.code,
     emailDelivered: mailResult.delivered,
     emailError: mailResult.detail || null,
   };
 }
 
 export async function resetPasswordWithCode({ email, code, newPassword }) {
-  const normalized = normalizeEmail(email);
-  const trimmedCode = String(code || "").trim();
-  if (!trimmedCode) throw new Error("Reset code is required.");
-  if (!newPassword || newPassword.length < 6) {
-    throw new Error("New password must be at least 6 characters.");
-  }
-
-  const resets = readJson(RESET_KEY, {});
-  const entry = resets[normalized];
-  if (!entry) throw new Error("No reset request found. Send a new code.");
-  if (Date.now() > entry.expiresAt) {
-    delete resets[normalized];
-    writeJson(RESET_KEY, resets);
-    throw new Error("Reset code has expired. Request a new one.");
-  }
-  if (entry.code !== trimmedCode) throw new Error("Invalid reset code.");
-
-  const users = getAllUsers();
-  const record = users[normalized];
-  if (!record) throw new Error("Account no longer exists.");
-
-  const salt = randomSalt();
-  record.salt = salt;
-  record.hash = await hashPassword(newPassword, salt);
-  writeJson(USERS_KEY, users);
-  delete resets[normalized];
-  writeJson(RESET_KEY, resets);
+  await api.post("/auth/reset-password", { email, code, newPassword }, false);
 }
+
+// Legacy exports (no longer used but kept so nothing breaks if imported elsewhere)
+export function getAllUsers() { return {}; }

@@ -44,6 +44,14 @@ export function normalizeCard(card) {
     period: card.period != null ? Number(card.period) : undefined,
     isClassTeacherSlot: Boolean(card.isClassTeacherSlot),
     lessonId: card.lessonId || null,
+    // Links this card to its sibling cards in every other class that share
+    // the same multi-class lesson (same subject/teachers, taught to several
+    // classes simultaneously) — see moveCardToSlot / getPlacementConflicts.
+    groupId: card.groupId || null,
+    // Which weekly occurrence of that shared lesson this is (0, 1, 2…) —
+    // needed to correlate TRAY siblings, which have no day/period yet to
+    // match by the way grid siblings do.
+    instanceIndex: card.instanceIndex != null ? Number(card.instanceIndex) : null,
   };
 }
 
@@ -163,10 +171,19 @@ export function countPlacedSlotsForClass(timetable, classId) {
 }
 
 export function buildTeacherOccupancy(timetable, ignoreCardId = null) {
+  // Accepts a single id, an array, or a Set — the grouped (multi-class)
+  // move/conflict logic needs to ignore every sibling card at once.
+  const ignoreSet =
+    ignoreCardId == null
+      ? null
+      : ignoreCardId instanceof Set
+      ? ignoreCardId
+      : new Set(Array.isArray(ignoreCardId) ? ignoreCardId : [ignoreCardId]);
+
   const occupancy = new Map();
 
   const register = (card, classId, day, period) => {
-    if (!card || card.id === ignoreCardId) return;
+    if (!card || (ignoreSet && ignoreSet.has(card.id))) return;
     for (const teacher of card.teachers) {
       occupancy.set(teacherBusyKey(teacher, day, period), {
         cardId: card.id,
@@ -424,7 +441,80 @@ function removeCardFromLocation(timetable, cardId) {
   return null;
 }
 
+/**
+ * Move a card to a new grid slot. A multi-class (grouped) card — the same
+ * lesson shared by several classes at once — is delegated to
+ * moveGroupedCardToSlot so every class in the group moves together, to the
+ * same new day/period, instead of only the one class being dragged in.
+ */
 export function moveCardToSlot(timetable, cardId, targetClassId, targetDay, targetPeriod) {
+  const found = findCardById(timetable, cardId);
+  if (found.card?.groupId && found.location === "grid") {
+    return moveGroupedCardToSlot(timetable, cardId, targetDay, targetPeriod);
+  }
+  if (found.card?.groupId && found.location === "tray") {
+    return moveGroupedTrayCardToSlot(timetable, cardId, targetClassId, targetDay, targetPeriod);
+  }
+  return moveSingleCardToSlot(timetable, cardId, targetClassId, targetDay, targetPeriod);
+}
+
+/**
+ * Place a grouped lesson that's still in the tray — dragging one class's
+ * tray card onto the grid places every OTHER class's still-tray sibling for
+ * the same weekly occurrence at the same time, each into its own class at
+ * the same day/period. If any sibling can't legally go there (clash, fixed
+ * target, time off), the whole placement is declined rather than only
+ * seating some of the group.
+ */
+function moveGroupedTrayCardToSlot(timetable, cardId, targetClassId, targetDay, targetPeriod) {
+  const found = findCardById(timetable, cardId);
+  if (!found.card) {
+    return { ok: false, message: "Lesson card not found.", timetable };
+  }
+
+  const dragged = normalizeCard(found.card);
+  const traySiblings = findGroupSiblingsInTray(timetable, dragged.groupId, dragged.instanceIndex, cardId);
+  const group = [{ ...dragged, classId: targetClassId }, ...traySiblings];
+  const groupIds = new Set(group.map((c) => c.id));
+
+  // Validate every member's own target slot, ignoring clashes against the
+  // group's own members (same classes/teachers moving together).
+  for (const member of group) {
+    const validation = validatePlacement(timetable, member, member.classId, targetDay, targetPeriod, {
+      ignoreCardId: groupIds,
+    });
+    if (!validation.ok) {
+      return { ok: false, message: `${member.classLabel}: ${validation.message}`, timetable };
+    }
+    const targetKey = makeSlotKey(member.classId, targetDay, targetPeriod);
+    const occupant = normalizeCard(timetable.cells?.[targetKey]);
+    if (occupant && occupant.fixed) {
+      return {
+        ok: false,
+        message: `${member.classLabel}: target cell has a fixed lesson. Unfix it or choose another cell.`,
+        timetable,
+      };
+    }
+  }
+
+  const next = cloneTimetable(timetable);
+  for (const member of group) {
+    removeCardFromLocation(next, member.id);
+    const targetKey = makeSlotKey(member.classId, targetDay, targetPeriod);
+    const displaced = normalizeCard(next.cells[targetKey]);
+    if (displaced) {
+      delete next.cells[targetKey];
+      const { day: _d, period: _p, ...rest } = displaced;
+      next.tray.push({ ...rest, fixed: displaced.fixed });
+    }
+    const { day: _d2, period: _p2, ...memberRest } = member;
+    next.cells[targetKey] = { ...memberRest, day: targetDay, period: targetPeriod };
+  }
+
+  return { ok: true, message: "", timetable: next };
+}
+
+function moveSingleCardToSlot(timetable, cardId, targetClassId, targetDay, targetPeriod) {
   const found = findCardById(timetable, cardId);
   if (!found.card) {
     return { ok: false, message: "Lesson card not found.", timetable };
@@ -477,6 +567,371 @@ export function moveCardToSlot(timetable, cardId, targetClassId, targetDay, targ
   return { ok: true, message: "", timetable: next };
 }
 
+/**
+ * Move every class's card for a shared multi-class lesson together, to the
+ * same new day/period, each staying in its own class. Teacher-clash checks
+ * ignore the group's own sibling cards (same classes/teachers moving as one
+ * unit is never a conflict with itself) — a real clash against a lesson
+ * outside the group still blocks the move so the caller can offer the
+ * Remove-collisions/Ignore choice via getPlacementConflicts.
+ */
+function moveGroupedCardToSlot(timetable, cardId, targetDay, targetPeriod) {
+  const found = findCardById(timetable, cardId);
+  if (!found.card) {
+    return { ok: false, message: "Lesson card not found.", timetable };
+  }
+  if (found.card.fixed) {
+    return { ok: false, message: "Fixed lessons cannot be moved. Unfix first.", timetable };
+  }
+
+  const card = normalizeCard(found.card);
+  const siblings = findGroupSiblingsAtSlot(timetable, card.groupId, found.day, found.period);
+  if (!siblings.length) {
+    return moveSingleCardToSlot(timetable, cardId, found.classId, targetDay, targetPeriod);
+  }
+  const siblingIds = new Set(siblings.map((s) => s.id));
+
+  if (found.day === targetDay && found.period === targetPeriod) {
+    return { ok: true, message: "", timetable };
+  }
+
+  // Validate every sibling's own slot — teacher availability, time-off, and
+  // daily/consecutive limits — ignoring clashes against the group's own members.
+  for (const sib of siblings) {
+    const validation = validatePlacement(timetable, sib, sib.classId, targetDay, targetPeriod, {
+      ignoreCardId: siblingIds,
+    });
+    if (!validation.ok) {
+      return { ok: false, message: `${sib.classLabel}: ${validation.message}`, timetable };
+    }
+
+    const targetKey = makeSlotKey(sib.classId, targetDay, targetPeriod);
+    const occupant = normalizeCard(timetable.cells?.[targetKey]);
+    if (occupant && !siblingIds.has(occupant.id) && occupant.fixed) {
+      return {
+        ok: false,
+        message: `${sib.classLabel}: target cell has a fixed lesson. Unfix it or choose another cell.`,
+        timetable,
+      };
+    }
+  }
+
+  // All clear — apply the move for every sibling at once.
+  const next = cloneTimetable(timetable);
+  for (const sib of siblings) {
+    delete next.cells[sib.slotKey];
+    const targetKey = makeSlotKey(sib.classId, targetDay, targetPeriod);
+
+    const displaced = normalizeCard(next.cells[targetKey]);
+    if (displaced && !siblingIds.has(displaced.id)) {
+      delete next.cells[targetKey];
+      const { day: _d, period: _p, ...rest } = displaced;
+      next.tray.push({ ...rest, fixed: displaced.fixed });
+    }
+
+    const { slotKey: _sk, ...sibRest } = sib;
+    next.cells[targetKey] = { ...sibRest, day: targetDay, period: targetPeriod };
+  }
+
+  return { ok: true, message: "", timetable: next };
+}
+
+/**
+ * Every card, across every class, that shares `groupId` and currently sits at
+ * (day, period) — i.e. the full set of synchronized siblings for one weekly
+ * occurrence of a multi-class lesson (same subject/teachers taught to several
+ * classes at once). Moving one of them must move all of them together.
+ */
+function findGroupSiblingsAtSlot(timetable, groupId, day, period) {
+  const siblings = [];
+  for (const [slotKey, raw] of Object.entries(timetable?.cells || {})) {
+    const card = normalizeCard(raw);
+    if (!card || card.groupId !== groupId) continue;
+    const parsed = parseSlotKey(slotKey);
+    if (!parsed || parsed.day !== day || parsed.period !== period) continue;
+    siblings.push({ ...card, classId: parsed.classId, day: parsed.day, period: parsed.period, slotKey });
+  }
+  return siblings;
+}
+
+/**
+ * Every OTHER class's tray card for the same weekly occurrence of a shared
+ * multi-class lesson — i.e. the group's remaining unplaced siblings, still
+ * waiting in their own class's tray. Tray cards have no day/period to
+ * correlate by (unlike grid siblings), so this matches on groupId +
+ * instanceIndex instead. Cards saved before that field existed (instanceIndex
+ * null) can't be reliably correlated and are left out.
+ */
+function findGroupSiblingsInTray(timetable, groupId, instanceIndex, excludeCardId) {
+  if (groupId == null || instanceIndex == null) return [];
+  return (timetable?.tray || [])
+    .map((raw) => normalizeCard(raw))
+    .filter(
+      (card) =>
+        card &&
+        card.id !== excludeCardId &&
+        card.groupId === groupId &&
+        card.instanceIndex === instanceIndex
+    );
+}
+
+/**
+ * Cards (in any class) whose teachers clash with placing `cardId` at the
+ * given day/period — used to offer "Remove collisions / Ignore" choices.
+ *
+ * For a multi-class (grouped) card, every sibling's own target slot is
+ * checked, and the group's own sibling cards are never reported as a
+ * conflict with each other — same classes, same teachers, so moving the
+ * whole group together is never a collision with itself.
+ */
+export function getPlacementConflicts(timetable, cardId, targetDay, targetPeriod) {
+  const found = findCardById(timetable, cardId);
+  const card = found.card ? normalizeCard(found.card) : null;
+  if (!card) return [];
+
+  if (card.groupId && (found.location === "grid" || found.location === "tray")) {
+    const siblings =
+      found.location === "grid"
+        ? findGroupSiblingsAtSlot(timetable, card.groupId, found.day, found.period)
+        : [card, ...findGroupSiblingsInTray(timetable, card.groupId, card.instanceIndex, cardId)];
+    const siblingIds = new Set(siblings.map((s) => s.id));
+    const occupancy = buildTeacherOccupancy(timetable, siblingIds);
+    const seen = new Set();
+    const conflicts = [];
+    for (const sib of siblings) {
+      for (const teacher of sib.teachers) {
+        const existing = occupancy.get(teacherBusyKey(teacher, targetDay, targetPeriod));
+        if (existing && !seen.has(existing.cardId)) {
+          seen.add(existing.cardId);
+          conflicts.push({ ...existing, day: targetDay, period: targetPeriod });
+        }
+      }
+    }
+    return conflicts;
+  }
+
+  const occupancy = buildTeacherOccupancy(timetable, cardId);
+  const seen = new Set();
+  const conflicts = [];
+  for (const teacher of card.teachers) {
+    const existing = occupancy.get(teacherBusyKey(teacher, targetDay, targetPeriod));
+    if (existing && !seen.has(existing.cardId)) {
+      seen.add(existing.cardId);
+      conflicts.push({ ...existing, day: targetDay, period: targetPeriod });
+    }
+  }
+  return conflicts;
+}
+
+/**
+ * Place the card at the slot bypassing teacher-clash validation.
+ * `removeConflictIds`: clashing cards to move to the tray first ("Remove
+ * collisions and place"); pass [] to leave them where they are ("Ignore
+ * conflicts and place"). Fixed cards are still protected.
+ *
+ * A multi-class (grouped) card is delegated to forceMoveGroupedCardToSlot so
+ * every class in the group moves together.
+ */
+export function forceMoveCardToSlot(timetable, cardId, targetClassId, targetDay, targetPeriod, removeConflictIds = []) {
+  const found = findCardById(timetable, cardId);
+  if (found.card?.groupId && found.location === "grid") {
+    return forceMoveGroupedCardToSlot(timetable, cardId, targetDay, targetPeriod, removeConflictIds);
+  }
+  if (found.card?.groupId && found.location === "tray") {
+    return forceMoveGroupedTrayCardToSlot(timetable, cardId, targetClassId, targetDay, targetPeriod, removeConflictIds);
+  }
+  return forceMoveSingleCardToSlot(timetable, cardId, targetClassId, targetDay, targetPeriod, removeConflictIds);
+}
+
+/** Same as moveGroupedTrayCardToSlot, but bumps removeConflictIds first ("Remove collisions"). */
+function forceMoveGroupedTrayCardToSlot(timetable, cardId, targetClassId, targetDay, targetPeriod, removeConflictIds = []) {
+  const found = findCardById(timetable, cardId);
+  if (!found.card) {
+    return { ok: false, message: "Lesson card not found.", timetable };
+  }
+
+  const dragged = normalizeCard(found.card);
+  const traySiblings = findGroupSiblingsInTray(timetable, dragged.groupId, dragged.instanceIndex, cardId);
+  const group = [{ ...dragged, classId: targetClassId }, ...traySiblings];
+
+  for (const member of group) {
+    const targetKey = makeSlotKey(member.classId, targetDay, targetPeriod);
+    const displaced = normalizeCard(timetable.cells?.[targetKey]);
+    if (displaced && displaced.fixed) {
+      return {
+        ok: false,
+        message: `${member.classLabel}: target cell has a fixed lesson. Unfix it or choose another cell.`,
+        timetable,
+      };
+    }
+  }
+
+  const next = cloneTimetable(timetable);
+
+  for (const conflictId of removeConflictIds) {
+    if (!conflictId) continue;
+    for (const key of Object.keys(next.cells)) {
+      const cell = next.cells[key];
+      if (cell?.id !== conflictId) continue;
+      const c = normalizeCard(cell);
+      delete next.cells[key];
+      if (c && !c.fixed) {
+        const { day: _d, period: _p, ...rest } = c;
+        next.tray.push({ ...rest, fixed: c.fixed });
+      } else if (c?.fixed) {
+        next.cells[key] = cell;
+      }
+      break;
+    }
+  }
+
+  for (const member of group) {
+    removeCardFromLocation(next, member.id);
+    const targetKey = makeSlotKey(member.classId, targetDay, targetPeriod);
+    const displaced = normalizeCard(next.cells[targetKey]);
+    if (displaced) {
+      delete next.cells[targetKey];
+      const { day: _d, period: _p, ...rest } = displaced;
+      next.tray.push({ ...rest, fixed: displaced.fixed });
+    }
+    const { day: _d2, period: _p2, ...memberRest } = member;
+    next.cells[targetKey] = { ...memberRest, day: targetDay, period: targetPeriod };
+  }
+
+  return { ok: true, message: "", timetable: next };
+}
+
+function forceMoveSingleCardToSlot(timetable, cardId, targetClassId, targetDay, targetPeriod, removeConflictIds = []) {
+  const found = findCardById(timetable, cardId);
+  if (!found.card) {
+    return { ok: false, message: "Lesson card not found.", timetable };
+  }
+  if (found.card.fixed) {
+    return { ok: false, message: "Fixed lessons cannot be moved. Unfix first.", timetable };
+  }
+
+  const targetKey = makeSlotKey(targetClassId, targetDay, targetPeriod);
+  const displaced = normalizeCard(timetable.cells?.[targetKey]);
+  if (displaced && displaced.id !== cardId && displaced.fixed) {
+    return { ok: false, message: "Target cell has a fixed lesson. Unfix it or choose another cell.", timetable };
+  }
+
+  const next = cloneTimetable(timetable);
+
+  // Move the clashing cards (usually in other classes) to the tray.
+  for (const conflictId of removeConflictIds) {
+    if (!conflictId || conflictId === cardId) continue;
+    for (const key of Object.keys(next.cells)) {
+      const cell = next.cells[key];
+      if (cell?.id !== conflictId) continue;
+      const c = normalizeCard(cell);
+      delete next.cells[key];
+      if (c && !c.fixed) {
+        const { day: _d, period: _p, ...rest } = c;
+        next.tray.push({ ...rest, fixed: c.fixed });
+      } else if (c?.fixed) {
+        // Never silently drop a fixed lesson — leave it in place.
+        next.cells[key] = cell;
+      }
+      break;
+    }
+  }
+
+  removeCardFromLocation(next, cardId);
+
+  const displacedNow = normalizeCard(next.cells?.[targetKey]);
+  if (displacedNow && displacedNow.id !== cardId) {
+    delete next.cells[targetKey];
+    const { day: _d, period: _p, ...rest } = displacedNow;
+    next.tray.push({ ...rest, fixed: displacedNow.fixed });
+  }
+
+  const cls = getClassById(next, targetClassId);
+  next.cells[targetKey] = {
+    ...found.card,
+    classId: targetClassId,
+    classLabel: cls?.label || found.card.classLabel,
+    day: targetDay,
+    period: targetPeriod,
+    fixed: found.card.fixed,
+  };
+
+  return { ok: true, message: "", timetable: next };
+}
+
+/**
+ * Same as forceMoveSingleCardToSlot, but for a multi-class lesson: every
+ * sibling (one per class in the group) moves to the same new day/period in
+ * its own class, atomically. `removeConflictIds` are bumped to their class's
+ * tray first; fixed cards block the whole move (never partially fragmented).
+ */
+function forceMoveGroupedCardToSlot(timetable, cardId, targetDay, targetPeriod, removeConflictIds = []) {
+  const found = findCardById(timetable, cardId);
+  if (!found.card) {
+    return { ok: false, message: "Lesson card not found.", timetable };
+  }
+  if (found.card.fixed) {
+    return { ok: false, message: "Fixed lessons cannot be moved. Unfix first.", timetable };
+  }
+
+  const card = normalizeCard(found.card);
+  const siblings = findGroupSiblingsAtSlot(timetable, card.groupId, found.day, found.period);
+  const siblingIds = new Set(siblings.map((s) => s.id));
+
+  for (const sib of siblings) {
+    const targetKey = makeSlotKey(sib.classId, targetDay, targetPeriod);
+    const displaced = normalizeCard(timetable.cells?.[targetKey]);
+    if (displaced && !siblingIds.has(displaced.id) && displaced.fixed) {
+      return {
+        ok: false,
+        message: `${sib.classLabel}: target cell has a fixed lesson. Unfix it or choose another cell.`,
+        timetable,
+      };
+    }
+  }
+
+  const next = cloneTimetable(timetable);
+
+  // Move the identified clashing cards (in other classes) to their tray.
+  for (const conflictId of removeConflictIds) {
+    if (!conflictId || siblingIds.has(conflictId)) continue;
+    for (const key of Object.keys(next.cells)) {
+      const cell = next.cells[key];
+      if (cell?.id !== conflictId) continue;
+      const c = normalizeCard(cell);
+      delete next.cells[key];
+      if (c && !c.fixed) {
+        const { day: _d, period: _p, ...rest } = c;
+        next.tray.push({ ...rest, fixed: c.fixed });
+      } else if (c?.fixed) {
+        next.cells[key] = cell;
+      }
+      break;
+    }
+  }
+
+  // Move every sibling to its own new slot (same day/period, own classId).
+  for (const sib of siblings) {
+    delete next.cells[sib.slotKey];
+    const targetKey = makeSlotKey(sib.classId, targetDay, targetPeriod);
+    const displacedNow = normalizeCard(next.cells[targetKey]);
+    if (displacedNow && !siblingIds.has(displacedNow.id)) {
+      delete next.cells[targetKey];
+      const { day: _d, period: _p, ...rest } = displacedNow;
+      next.tray.push({ ...rest, fixed: displacedNow.fixed });
+    }
+    const { slotKey: _sk, ...sibRest } = sib;
+    next.cells[targetKey] = { ...sibRest, day: targetDay, period: targetPeriod };
+  }
+
+  return { ok: true, message: "", timetable: next };
+}
+
+/**
+ * Send a card to the tray. A multi-class (grouped) card sends every class's
+ * sibling card to the tray together — leaving some siblings on the grid and
+ * only one in the tray would desynchronize the shared lesson.
+ */
 export function removeCardToTray(timetable, cardId) {
   const found = findCardById(timetable, cardId);
   if (!found.card) {
@@ -489,6 +944,26 @@ export function removeCardToTray(timetable, cardId) {
 
   if (found.location === "tray") {
     return { ok: true, message: "", timetable };
+  }
+
+  const card = normalizeCard(found.card);
+  if (card.groupId) {
+    const siblings = findGroupSiblingsAtSlot(timetable, card.groupId, found.day, found.period);
+    const fixedSibling = siblings.find((s) => s.fixed);
+    if (fixedSibling) {
+      return {
+        ok: false,
+        message: `${fixedSibling.classLabel}: this lesson is fixed there. Unfix it in every class before removing the group.`,
+        timetable,
+      };
+    }
+    const next = cloneTimetable(timetable);
+    for (const sib of siblings) {
+      delete next.cells[sib.slotKey];
+      const { day: _d, period: _p, slotKey: _sk, ...rest } = sib;
+      next.tray.push(rest);
+    }
+    return { ok: true, message: "", timetable: next };
   }
 
   const next = cloneTimetable(timetable);
@@ -660,6 +1135,8 @@ export function buildInteractiveTimetableFromGeneration({
           day,
           period,
           lessonId: slot.lessonId,
+          groupId: slot.groupId || null,
+          instanceIndex: slot.instanceIndex,
         });
       }
     }
@@ -676,6 +1153,9 @@ export function buildInteractiveTimetableFromGeneration({
         subject: u.subject,
         teachers: u.teachers || [],
         fixed: false,
+        lessonId: u.lessonId || null,
+        groupId: u.groupId || null,
+        instanceIndex: u.instanceIndex,
       });
     })
     .filter(Boolean);

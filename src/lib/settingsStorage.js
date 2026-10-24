@@ -352,7 +352,21 @@ export function loadClassesList() {
     grade: c.grade,
     section: c.section,
     title: c.title,
+    classTeacher: c.classTeacher || "",
+    classTeacherSubject: c.classTeacherSubject || "",
   }));
+}
+
+export function saveClassMeta(classId, { classTeacher, classTeacherSubject }) {
+  const parsed = readJson(CLASSES_STORAGE_KEY, null);
+  let list = [];
+  if (Array.isArray(parsed)) list = parsed;
+  else if (parsed?.classes) list = parsed.classes;
+  const updated = list.map((c) =>
+    c.id === classId ? { ...c, classTeacher, classTeacherSubject } : c
+  );
+  if (Array.isArray(parsed)) writeJson(CLASSES_STORAGE_KEY, updated);
+  else writeJson(CLASSES_STORAGE_KEY, { ...parsed, classes: updated });
 }
 
 export function loadClassLessonsMap() {
@@ -369,20 +383,34 @@ function newTeacherLessonId() {
 /**
  * Rebuild every teacher's `lessons` array from all saved class lessons.
  * Preserves `isClassTeacher` when the class label still matches.
+ *
+ * A class-lesson row that's part of a multi-class group (`groupId` set, mirrored
+ * into every class in the group by `propagateMultiClassLessons`) produces only
+ * ONE teacher-lesson entry per teacher — not one per class — with `classLabel`
+ * set to whichever class is processed first and `additionalClasses` covering
+ * every other class in the group.
  */
 export function syncTeacherLessonsFromClassLessons() {
   const classes = loadClassesList();
   const classLessonsMap = loadClassLessonsMap();
+  const classLabelById = new Map(classes.map((c) => [c.id, c.label]));
   const lessonsByTeacherName = new Map();
+  const seenGroupByTeacher = new Set();
 
-  const addLesson = (teacherName, { subject, classLabel, periodsPerWeek }) => {
+  const addLesson = (teacherName, { subject, classLabel, periodsPerWeek, additionalClasses, groupId }) => {
     const name = String(teacherName || "").trim();
     if (!name) return;
+    if (groupId) {
+      const key = `${name}|${groupId}`;
+      if (seenGroupByTeacher.has(key)) return;
+      seenGroupByTeacher.add(key);
+    }
     if (!lessonsByTeacherName.has(name)) lessonsByTeacherName.set(name, []);
     lessonsByTeacherName.get(name).push({
       id: newTeacherLessonId(),
       subject: String(subject || "").trim(),
       classLabel: String(classLabel || "").trim(),
+      additionalClasses: additionalClasses || [],
       periodsPerWeek: Number(periodsPerWeek) || 0,
       isClassTeacher: false,
     });
@@ -393,10 +421,15 @@ export function syncTeacherLessonsFromClassLessons() {
     for (const row of classLessons) {
       const periodsPerWeek = Number(row.lessonsPerWeek) || 0;
       if (!periodsPerWeek) continue;
+      const additionalClassLabels = Array.isArray(row.additionalClasses)
+        ? row.additionalClasses.map((id) => classLabelById.get(id)).filter(Boolean)
+        : [];
       const payload = {
         subject: row.subject,
         classLabel: cls.label,
         periodsPerWeek,
+        additionalClasses: additionalClassLabels,
+        groupId: row.groupId || null,
       };
       addLesson(row.primaryTeacher, payload);
       const extras = Array.isArray(row.additionalTeachers) ? row.additionalTeachers : [];
@@ -404,14 +437,27 @@ export function syncTeacherLessonsFromClassLessons() {
     }
   }
 
+  // Build map: teacherName -> { classLabel, subject } from saved class meta
+  const classTeacherMetaByTeacher = new Map();
+  for (const cls of classes) {
+    const ct = String(cls.classTeacher || "").trim();
+    if (ct) {
+      classTeacherMetaByTeacher.set(ct, {
+        classLabel: cls.label,
+        subject: String(cls.classTeacherSubject || "").trim(),
+      });
+    }
+  }
+
   const teachers = loadTeachersFull();
   const updated = teachers.map((t) => {
-    const classTeacherLabels = new Set(
-      (t.lessons || []).filter((l) => l.isClassTeacher && l.classLabel).map((l) => l.classLabel)
-    );
+    const meta = classTeacherMetaByTeacher.get(t.name);
     const lessons = (lessonsByTeacherName.get(t.name) || []).map((l) => ({
       ...l,
-      isClassTeacher: classTeacherLabels.has(l.classLabel),
+      isClassTeacher: meta
+        ? (l.classLabel === meta.classLabel &&
+            (!meta.subject || l.subject === meta.subject))
+        : false,
     }));
     return {
       ...t,
@@ -424,10 +470,72 @@ export function syncTeacherLessonsFromClassLessons() {
   return updated;
 }
 
+/**
+ * Mirror a multi-class lesson row (same teacher(s)/subject/lessons-per-week, taught
+ * simultaneously to several classes) into every other class in its group, and remove
+ * the mirror from classes that were dropped from the group. Keeps every class's lesson
+ * list — and therefore every teacher's lesson list, rebuilt by syncTeacherLessonsFromClassLessons
+ * — in sync without the user re-entering the row in each class individually.
+ */
+function propagateMultiClassLessons(sourceClassId, lessons, removedGroupIds) {
+  const map = loadClassLessonsMap();
+  const classes = loadClassesList();
+  const validClassIds = new Set(classes.map((c) => c.id));
+
+  const handleGroup = (groupId, desiredIds) => {
+    for (const cls of classes) {
+      if (cls.id === sourceClassId) continue;
+      const rows = Array.isArray(map[cls.id]) ? [...map[cls.id]] : [];
+      const idx = rows.findIndex((r) => r.groupId === groupId);
+
+      if (desiredIds.has(cls.id)) {
+        const sourceRow = lessons.find((r) => r.groupId === groupId);
+        if (!sourceRow) continue;
+        const mirrored = {
+          id: idx >= 0 ? rows[idx].id : newTeacherLessonId(),
+          groupId,
+          primaryTeacher: sourceRow.primaryTeacher,
+          additionalTeachers: sourceRow.additionalTeachers,
+          subject: sourceRow.subject,
+          lessonsPerWeek: sourceRow.lessonsPerWeek,
+          additionalClasses: [...desiredIds].filter((id) => id !== cls.id),
+        };
+        if (idx >= 0) rows[idx] = mirrored;
+        else rows.push(mirrored);
+        map[cls.id] = rows;
+      } else if (idx >= 0) {
+        rows.splice(idx, 1);
+        map[cls.id] = rows;
+      }
+    }
+  };
+
+  for (const row of lessons) {
+    if (!row.groupId) continue;
+    const additional = (row.additionalClasses || []).filter(
+      (id) => validClassIds.has(id) && id !== sourceClassId
+    );
+    handleGroup(row.groupId, new Set([sourceClassId, ...additional]));
+  }
+
+  for (const groupId of removedGroupIds || []) {
+    handleGroup(groupId, new Set());
+  }
+
+  writeJson(CLASS_LESSONS_STORAGE_KEY, map);
+}
+
 export function saveClassLessonsForClass(classId, lessons) {
   const map = loadClassLessonsMap();
+  const previousRows = Array.isArray(map[classId]) ? map[classId] : [];
+  const previousGroupIds = new Set(previousRows.map((r) => r.groupId).filter(Boolean));
+  const currentGroupIds = new Set(lessons.map((r) => r.groupId).filter(Boolean));
+  const removedGroupIds = [...previousGroupIds].filter((id) => !currentGroupIds.has(id));
+
   map[classId] = lessons;
   writeJson(CLASS_LESSONS_STORAGE_KEY, map);
+
+  propagateMultiClassLessons(classId, lessons, removedGroupIds);
   syncTeacherLessonsFromClassLessons();
 }
 

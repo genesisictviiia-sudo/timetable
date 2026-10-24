@@ -18,6 +18,7 @@ import {
   saveTeachersFull,
   teacherListSummary,
 } from "../../lib/settingsStorage";
+import { flushPendingSyncs } from "../../lib/userDataStorage";
 import "../../App.css";
 
 function newTeacherRecord({ name, phone, email }) {
@@ -39,6 +40,7 @@ export default function TeachersSettingsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [showLessons, setShowLessons] = useState(false);
   const [showTimeOff, setShowTimeOff] = useState(false);
+  const [editTeacherId, setEditTeacherId] = useState(null);
 
   useEffect(() => {
     setTeachers(loadTeachersFull().map((t) => ({ ...t, selected: false })));
@@ -93,6 +95,22 @@ export default function TeachersSettingsPage() {
     setSelectedId(record.id);
   };
 
+  const editingTeacher = teachers.find((t) => t.id === editTeacherId) ?? null;
+
+  const openEdit = (id, e) => {
+    e.stopPropagation();
+    setEditTeacherId(id);
+  };
+
+  const saveEditedTeacher = ({ name, phone, email }) => {
+    setTeachers((prev) =>
+      prev.map((t) =>
+        t.id === editTeacherId ? { ...t, name, phone, email, shortName: name } : t
+      )
+    );
+    setEditTeacherId(null);
+  };
+
   const updateTeacherLessons = (teacherId, lessons) => {
     setTeachers((prev) =>
       prev.map((t) =>
@@ -104,11 +122,17 @@ export default function TeachersSettingsPage() {
   };
 
   const saveTimeOffGrid = (teacherId, timeOffGrid) => {
-    setTeachers((prev) => prev.map((t) => (t.id === teacherId ? { ...t, timeOffGrid } : t)));
+    setTeachers((prev) => {
+      const next = prev.map((t) => (t.id === teacherId ? { ...t, timeOffGrid } : t));
+      saveTeachersFull(next);
+      flushPendingSyncs();
+      return next;
+    });
   };
 
   const saveAll = () => {
     saveTeachersFull(teachers);
+    flushPendingSyncs();
     alert("All teachers and lessons saved.");
   };
 
@@ -192,12 +216,13 @@ export default function TeachersSettingsPage() {
               <th>Lessons / week</th>
               <th>Time off</th>
               <th style={{ width: "2.5rem" }} aria-label="Delete" />
+              <th style={{ width: "2.5rem" }} aria-label="Edit" />
             </tr>
           </thead>
           <tbody>
             {teachers.length === 0 ? (
               <tr>
-                <td colSpan={8} className="teacher-list-empty">
+                <td colSpan={9} className="teacher-list-empty">
                   No teachers yet. Use &quot;Add new&quot; or upload a sample CSV.
                 </td>
               </tr>
@@ -252,6 +277,17 @@ export default function TeachersSettingsPage() {
                         🗑
                       </button>
                     </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="row-edit-btn"
+                        onClick={(e) => openEdit(t.id, e)}
+                        title="Edit teacher"
+                        aria-label={`Edit ${t.name}`}
+                      >
+                        ✎
+                      </button>
+                    </td>
                   </tr>
                 );
               })
@@ -270,6 +306,13 @@ export default function TeachersSettingsPage() {
       </div>
 
       <AddTeacherModal open={showAdd} onClose={() => setShowAdd(false)} onSave={addTeacher} />
+
+      <AddTeacherModal
+        open={Boolean(editingTeacher)}
+        teacher={editingTeacher}
+        onClose={() => setEditTeacherId(null)}
+        onSave={saveEditedTeacher}
+      />
 
       <TeacherLessonsModal
         open={showLessons}

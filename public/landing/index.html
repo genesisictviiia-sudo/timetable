@@ -1,0 +1,1206 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartScheduler â€“ AI-Powered Timetable Generator for Schools & Colleges</title>
+  <meta name="description" content="SmartScheduler is an AI-powered timetable management software that creates conflict-free academic schedules in seconds. Automate faculty allocation, lab scheduling, and workload balancing for schools, colleges, and universities." />
+  <meta name="keywords" content="AI timetable generator, school timetable software, college timetable management system, automatic timetable generator, academic scheduling software, faculty timetable software, university scheduling system" />
+  <link rel="canonical" href="https://smartscheduler.in/landing/" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="SmartScheduler â€“ AI-Powered Timetable Generator" />
+  <meta property="og:description" content="Create conflict-free academic timetables in seconds using AI. Automate teacher allocation, classroom scheduling, and workload balancing." />
+  <meta property="og:url" content="https://smartscheduler.in/landing/" />
+  <meta property="og:site_name" content="SmartScheduler" />
+  <meta property="og:image" content="https://smartscheduler.in/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SmartScheduler â€“ AI-Powered Timetable Generator" />
+  <meta name="twitter:description" content="Create conflict-free academic timetables in seconds using AI." />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Organization Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "SmartScheduler",
+    "url": "https://smartscheduler.in",
+    "logo": "https://smartscheduler.in/logo.png",
+    "description": "AI-powered timetable management software for schools, colleges, and universities.",
+    "sameAs": [
+      "https://twitter.com/smartscheduler",
+      "https://linkedin.com/company/smartscheduler"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "customer support",
+      "email": "admin.campusscheduler@gmail.com"
+    }
+  }
+  </script>
+
+  <!-- SoftwareApplication Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "SmartScheduler",
+    "operatingSystem": "Web",
+    "applicationCategory": "BusinessApplication",
+    "description": "AI-powered academic timetable generator for schools, colleges, and universities",
+    "url": "https://smartscheduler.in",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "INR"
+    }
+  }
+  </script>
+
+  <!-- FAQ Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is SmartScheduler?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SmartScheduler is an AI-powered timetable management software that helps educational institutions automatically generate conflict-free academic timetables in seconds. It handles teacher allocation, classroom scheduling, lab management, and workload balancing."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Who can use SmartScheduler?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SmartScheduler is designed for schools, junior colleges, degree colleges, engineering colleges, universities, and training institutes â€” any educational institution that needs automated academic scheduling."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does SmartScheduler support lab scheduling?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, SmartScheduler fully supports lab scheduling. You can define lab sessions, assign specific rooms, and the AI ensures no conflicts with regular classroom periods."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I export timetables from SmartScheduler?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, SmartScheduler allows you to export timetables as PDF files for easy printing and sharing with staff and students."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is SmartScheduler cloud-based?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, SmartScheduler is fully cloud-based and accessible from any device with a browser. Your data is securely stored and always available."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I edit the generated schedules?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Absolutely. After the AI generates your timetable, you can manually review and edit any slot, reassign teachers, and make adjustments before publishing."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --blue-50: #eff6ff;
+      --blue-100: #dbeafe;
+      --blue-500: #3b82f6;
+      --blue-600: #2563eb;
+      --blue-700: #1d4ed8;
+      --blue-800: #1e40af;
+      --blue-900: #1e3a8a;
+      --amber-400: #fbbf24;
+      --amber-500: #f59e0b;
+      --slate-50: #f8fafc;
+      --slate-100: #f1f5f9;
+      --slate-200: #e2e8f0;
+      --slate-400: #94a3b8;
+      --slate-500: #64748b;
+      --slate-600: #475569;
+      --slate-700: #334155;
+      --slate-800: #1e293b;
+      --slate-900: #0f172a;
+      --green-500: #22c55e;
+      --purple-500: #a855f7;
+      --rose-500: #f43f5e;
+      --radius: 12px;
+      --radius-lg: 20px;
+      --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,.12);
+      --shadow-xl: 0 20px 60px rgba(37,99,235,.15);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      color: var(--slate-800);
+      background: #fff;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    img { max-width: 100%; height: auto; }
+    a { text-decoration: none; color: inherit; }
+
+    /* â”€â”€ Utility â”€â”€ */
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; }
+    .section { padding: 96px 0; }
+    .section--alt { background: var(--slate-50); }
+    .section--dark { background: var(--blue-900); color: #fff; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: .375rem;
+      background: var(--blue-50); color: var(--blue-700);
+      font-size: .75rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+      padding: .35rem .85rem; border-radius: 999px;
+      border: 1px solid var(--blue-100);
+    }
+
+    .section-label { text-align: center; margin-bottom: 1rem; }
+    .section-title {
+      font-size: clamp(1.75rem, 4vw, 2.75rem);
+      font-weight: 800; line-height: 1.2;
+      color: var(--slate-900); text-align: center;
+      margin-bottom: 1rem;
+    }
+    .section-title--light { color: #fff; }
+    .section-sub {
+      font-size: 1.125rem; color: var(--slate-500);
+      text-align: center; max-width: 640px; margin: 0 auto 3.5rem;
+    }
+    .section-sub--light { color: rgba(255,255,255,.75); }
+
+    /* â”€â”€ Buttons â”€â”€ */
+    .btn {
+      display: inline-flex; align-items: center; gap: .5rem;
+      padding: .75rem 1.75rem; border-radius: 999px;
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      border: none; transition: all .2s;
+    }
+    .btn-primary {
+      background: var(--blue-600); color: #fff;
+      box-shadow: 0 4px 14px rgba(37,99,235,.35);
+    }
+    .btn-primary:hover { background: var(--blue-700); transform: translateY(-2px); box-shadow: 0 8px 20px rgba(37,99,235,.4); }
+    .btn-outline {
+      background: transparent; color: var(--blue-600);
+      border: 2px solid var(--blue-600);
+    }
+    .btn-outline:hover { background: var(--blue-600); color: #fff; transform: translateY(-2px); }
+    .btn-white {
+      background: #fff; color: var(--blue-700);
+      box-shadow: 0 4px 14px rgba(0,0,0,.1);
+    }
+    .btn-white:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.15); }
+    .btn-outline-white {
+      background: transparent; color: #fff;
+      border: 2px solid rgba(255,255,255,.5);
+    }
+    .btn-outline-white:hover { background: rgba(255,255,255,.1); border-color: #fff; }
+    .btn-lg { padding: .9rem 2.25rem; font-size: 1.05rem; }
+
+    /* â”€â”€ Navbar â”€â”€ */
+    .navbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(255,255,255,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--slate-100);
+      transition: box-shadow .3s;
+    }
+    .navbar.scrolled { box-shadow: 0 2px 20px rgba(0,0,0,.08); }
+    .navbar__inner {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 68px;
+    }
+    .navbar__brand {
+      display: flex; align-items: center; gap: .625rem;
+      font-size: 1.25rem; font-weight: 800; color: var(--blue-700);
+    }
+    .navbar__brand svg { width: 32px; height: 32px; }
+    .navbar__links {
+      display: flex; align-items: center; gap: 2rem;
+      list-style: none;
+    }
+    .navbar__links a {
+      font-size: .9375rem; font-weight: 500; color: var(--slate-600);
+      transition: color .15s;
+    }
+    .navbar__links a:hover { color: var(--blue-600); }
+    .navbar__actions { display: flex; align-items: center; gap: .75rem; }
+    .navbar__toggle { display: none; background: none; border: none; cursor: pointer; padding: .5rem; }
+    .navbar__toggle span {
+      display: block; width: 22px; height: 2px; background: var(--slate-700);
+      margin: 5px 0; border-radius: 2px; transition: all .3s;
+    }
+
+    /* â”€â”€ Hero â”€â”€ */
+    .hero {
+      padding: 160px 0 96px;
+      background: linear-gradient(135deg, #eff6ff 0%, #fff 50%, #f0fdf4 100%);
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(37,99,235,.12) 0%, transparent 70%);
+    }
+    .hero__inner { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: center; position: relative; }
+    .hero__eyebrow { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.5rem; }
+    .hero__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green-500); animation: pulse-dot 2s ease-in-out infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(1.4)} }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.25rem); font-weight: 900; line-height: 1.1;
+      color: var(--slate-900); margin-bottom: 1.5rem;
+    }
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--blue-600), var(--blue-800));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .hero__sub { font-size: 1.125rem; color: var(--slate-500); max-width: 520px; margin-bottom: 2.5rem; line-height: 1.7; }
+    .hero__ctas { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2.5rem; }
+    .hero__trust { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .hero__trust-item { display: flex; align-items: center; gap: .375rem; font-size: .875rem; color: var(--slate-500); }
+    .hero__trust-item svg { color: var(--green-500); }
+
+    /* Dashboard mockup */
+    .hero__visual { position: relative; }
+    .dashboard-mockup {
+      background: #fff; border-radius: 20px;
+      box-shadow: 0 24px 80px rgba(37,99,235,.2), 0 4px 20px rgba(0,0,0,.08);
+      overflow: hidden; border: 1px solid var(--slate-100);
+      animation: float 6s ease-in-out infinite;
+    }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+    .mockup-header {
+      background: var(--blue-700); padding: 1rem 1.25rem;
+      display: flex; align-items: center; gap: .75rem;
+    }
+    .mockup-dot { width:10px;height:10px;border-radius:50%; }
+    .mockup-title { font-size:.8rem;font-weight:600;color:rgba(255,255,255,.8);margin-left:.5rem; }
+    .mockup-body { padding: 1.25rem; }
+    .mockup-grid { display: grid; grid-template-columns: 80px repeat(5,1fr); gap: 4px; font-size: .7rem; }
+    .mockup-cell {
+      padding: .45rem .5rem; border-radius: 6px; text-align: center; min-height: 44px;
+      display: flex; align-items: center; justify-content: center; font-weight: 500; line-height: 1.2;
+    }
+    .mockup-cell--header { background: var(--slate-100); color: var(--slate-600); font-weight: 700; font-size: .65rem; text-transform: uppercase; letter-spacing: .03em; }
+    .mockup-cell--time { background: var(--slate-50); color: var(--slate-500); font-size: .65rem; }
+    .mockup-cell--blue { background: #dbeafe; color: #1d4ed8; }
+    .mockup-cell--green { background: #dcfce7; color: #15803d; }
+    .mockup-cell--purple { background: #f3e8ff; color: #7e22ce; }
+    .mockup-cell--amber { background: #fef9c3; color: #854d0e; }
+    .mockup-cell--rose { background: #ffe4e6; color: #9f1239; }
+    .mockup-cell--empty { background: var(--slate-50); }
+    .mockup-stats { display: flex; gap: .75rem; margin-top: 1rem; }
+    .mockup-stat { flex: 1; background: var(--slate-50); border-radius: 8px; padding: .6rem; text-align: center; }
+    .mockup-stat__val { font-size: 1.1rem; font-weight: 800; color: var(--blue-700); }
+    .mockup-stat__lbl { font-size: .6rem; color: var(--slate-500); text-transform: uppercase; letter-spacing: .04em; }
+    .mockup-badge {
+      position: absolute; top: -16px; right: -16px;
+      background: var(--green-500); color: #fff;
+      border-radius: 999px; padding: .4rem 1rem;
+      font-size: .75rem; font-weight: 700;
+      box-shadow: 0 4px 12px rgba(34,197,94,.4);
+      animation: bounce-in .6s .5s both;
+    }
+    @keyframes bounce-in { 0%{opacity:0;transform:scale(.5)} 80%{transform:scale(1.1)} 100%{opacity:1;transform:scale(1)} }
+
+    /* â”€â”€ Trusted By â”€â”€ */
+    .trusted-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+    .trusted-card {
+      background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius-lg);
+      padding: 2rem 1.5rem; text-align: center;
+      transition: all .3s; cursor: default;
+    }
+    .trusted-card:hover { transform: translateY(-6px); box-shadow: var(--shadow-xl); border-color: var(--blue-200); }
+    .trusted-card__icon { font-size: 2.5rem; margin-bottom: 1rem; }
+    .trusted-card__title { font-size: 1.05rem; font-weight: 700; color: var(--slate-800); margin-bottom: .4rem; }
+    .trusted-card__sub { font-size: .85rem; color: var(--slate-500); }
+
+    /* â”€â”€ About â”€â”€ */
+    .about__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5rem; align-items: center; }
+    .about__challenges { display: flex; flex-direction: column; gap: 1.25rem; }
+    .challenge-item {
+      display: flex; gap: 1rem; align-items: flex-start;
+      padding: 1.25rem; border-radius: var(--radius);
+      background: #fff; border: 1px solid var(--slate-200);
+      transition: all .3s;
+    }
+    .challenge-item:hover { border-color: var(--blue-300); box-shadow: var(--shadow); }
+    .challenge-item__icon {
+      width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 1.25rem;
+    }
+    .challenge-item__icon--red { background: #fee2e2; }
+    .challenge-item__icon--amber { background: #fef9c3; }
+    .challenge-item__icon--blue { background: #dbeafe; }
+    .challenge-item__icon--purple { background: #f3e8ff; }
+    .challenge-item__title { font-weight: 700; color: var(--slate-800); margin-bottom: .2rem; font-size: .95rem; }
+    .challenge-item__desc { font-size: .85rem; color: var(--slate-500); }
+    .about__stat-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .stat-card {
+      background: linear-gradient(135deg, var(--blue-600), var(--blue-800));
+      color: #fff; border-radius: var(--radius-lg); padding: 1.75rem;
+      text-align: center;
+    }
+    .stat-card:nth-child(2) { background: linear-gradient(135deg, #7c3aed, #5b21b6); }
+    .stat-card:nth-child(3) { background: linear-gradient(135deg, #059669, #065f46); }
+    .stat-card:nth-child(4) { background: linear-gradient(135deg, #d97706, #92400e); }
+    .stat-card__num { font-size: 2.5rem; font-weight: 900; margin-bottom: .25rem; }
+    .stat-card__lbl { font-size: .85rem; opacity: .85; font-weight: 500; }
+
+    /* â”€â”€ Features â”€â”€ */
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+    .feature-card {
+      background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius-lg);
+      padding: 2rem; transition: all .35s;
+    }
+    .feature-card:hover { transform: translateY(-8px); box-shadow: var(--shadow-xl); border-color: var(--blue-300); }
+    .feature-card__icon {
+      width: 56px; height: 56px; border-radius: 16px; margin-bottom: 1.25rem;
+      display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+    }
+    .feature-card__icon--1 { background: #dbeafe; }
+    .feature-card__icon--2 { background: #dcfce7; }
+    .feature-card__icon--3 { background: #f3e8ff; }
+    .feature-card__icon--4 { background: #fef9c3; }
+    .feature-card__icon--5 { background: #ffe4e6; }
+    .feature-card__icon--6 { background: #ecfdf5; }
+    .feature-card h3 { font-size: 1.1rem; font-weight: 700; color: var(--slate-900); margin-bottom: .6rem; }
+    .feature-card p { font-size: .9rem; color: var(--slate-500); line-height: 1.65; margin-bottom: 1.25rem; }
+    .feature-card__link { font-size: .875rem; font-weight: 600; color: var(--blue-600); display: flex; align-items: center; gap: .3rem; }
+    .feature-card__link:hover { gap: .6rem; }
+
+    /* â”€â”€ How It Works â”€â”€ */
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; position: relative; }
+    .steps::before {
+      content: ''; position: absolute;
+      top: 40px; left: calc(16.666% + 1rem); right: calc(16.666% + 1rem);
+      height: 2px; background: linear-gradient(90deg, var(--blue-200), var(--blue-400), var(--blue-200));
+    }
+    .step { text-align: center; }
+    .step__num {
+      width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 1.5rem;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, var(--blue-600), var(--blue-800));
+      color: #fff; font-size: 1.75rem; font-weight: 900;
+      box-shadow: 0 8px 24px rgba(37,99,235,.35);
+      position: relative; z-index: 1;
+    }
+    .step h3 { font-size: 1.15rem; font-weight: 700; color: var(--slate-900); margin-bottom: .75rem; }
+    .step p { font-size: .9rem; color: var(--slate-500); line-height: 1.65; max-width: 260px; margin: 0 auto; }
+
+    /* â”€â”€ Benefits â”€â”€ */
+    .benefits-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
+    .benefit-card {
+      background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15);
+      border-radius: var(--radius-lg); padding: 2rem; text-align: center;
+      transition: all .3s;
+    }
+    .benefit-card:hover { background: rgba(255,255,255,.14); transform: translateY(-4px); }
+    .benefit-card__icon { font-size: 2.5rem; margin-bottom: 1rem; }
+    .benefit-card__num { font-size: 2.75rem; font-weight: 900; margin-bottom: .4rem; color: var(--amber-400); }
+    .benefit-card__title { font-size: 1rem; font-weight: 700; margin-bottom: .5rem; }
+    .benefit-card__desc { font-size: .85rem; opacity: .75; line-height: 1.6; }
+
+    /* â”€â”€ Industries â”€â”€ */
+    .industries-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
+    .industry-pill {
+      background: #fff; border: 1.5px solid var(--slate-200); border-radius: 999px;
+      padding: .85rem 1.25rem; text-align: center;
+      font-size: .875rem; font-weight: 600; color: var(--slate-700);
+      display: flex; align-items: center; justify-content: center; gap: .5rem;
+      transition: all .25s; cursor: default;
+    }
+    .industry-pill:hover { border-color: var(--blue-500); color: var(--blue-700); background: var(--blue-50); transform: scale(1.04); }
+
+    /* â”€â”€ Testimonials â”€â”€ */
+    .testimonials-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+    .testimonial-card {
+      background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius-lg);
+      padding: 2rem; transition: all .3s;
+    }
+    .testimonial-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+    .testimonial-card__stars { color: var(--amber-400); font-size: 1rem; margin-bottom: 1rem; }
+    .testimonial-card__quote { font-size: .95rem; color: var(--slate-600); line-height: 1.75; margin-bottom: 1.5rem; font-style: italic; }
+    .testimonial-card__author { display: flex; align-items: center; gap: .875rem; }
+    .testimonial-card__avatar {
+      width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; font-weight: 800; color: #fff;
+    }
+    .testimonial-card__name { font-weight: 700; font-size: .9rem; color: var(--slate-900); }
+    .testimonial-card__role { font-size: .8rem; color: var(--slate-500); }
+
+    /* â”€â”€ FAQ â”€â”€ */
+    .faq-list { max-width: 780px; margin: 0 auto; }
+    .faq-item {
+      border: 1px solid var(--slate-200); border-radius: var(--radius);
+      margin-bottom: .875rem; overflow: hidden; transition: border-color .2s;
+    }
+    .faq-item:hover { border-color: var(--blue-300); }
+    .faq-question {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1.25rem 1.5rem; cursor: pointer;
+      font-weight: 600; font-size: .975rem; color: var(--slate-800);
+      background: #fff; border: none; width: 100%; text-align: left;
+    }
+    .faq-question:hover { color: var(--blue-700); }
+    .faq-icon { width: 24px; height: 24px; border-radius: 50%; background: var(--blue-50); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all .3s; font-size: .875rem; }
+    .faq-item.open .faq-icon { background: var(--blue-600); color: #fff; transform: rotate(45deg); }
+    .faq-answer {
+      max-height: 0; overflow: hidden; transition: max-height .4s ease, padding .3s;
+      background: var(--slate-50);
+    }
+    .faq-item.open .faq-answer { max-height: 300px; }
+    .faq-answer p { padding: 1rem 1.5rem 1.25rem; font-size: .9rem; color: var(--slate-600); line-height: 1.75; }
+
+    /* â”€â”€ Final CTA â”€â”€ */
+    .final-cta {
+      background: linear-gradient(135deg, var(--blue-700) 0%, var(--blue-900) 100%);
+      padding: 100px 0; text-align: center; position: relative; overflow: hidden;
+    }
+    .final-cta::before {
+      content: ''; position: absolute; inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .final-cta h2 { font-size: clamp(2rem, 5vw, 3rem); font-weight: 900; color: #fff; margin-bottom: 1rem; }
+    .final-cta p { color: rgba(255,255,255,.8); font-size: 1.125rem; max-width: 600px; margin: 0 auto 2.5rem; }
+    .final-cta__btns { display: flex; justify-content: center; flex-wrap: wrap; gap: 1rem; }
+
+    /* â”€â”€ Footer â”€â”€ */
+    .footer { background: var(--slate-900); color: rgba(255,255,255,.7); }
+    .footer__top { padding: 64px 0 48px; }
+    .footer__grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 3rem; }
+    .footer__brand { display: flex; align-items: center; gap: .625rem; font-size: 1.15rem; font-weight: 800; color: #fff; margin-bottom: 1rem; }
+    .footer__desc { font-size: .875rem; line-height: 1.75; max-width: 300px; }
+    .footer__col-title { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.5); margin-bottom: 1.25rem; }
+    .footer__links { list-style: none; display: flex; flex-direction: column; gap: .65rem; }
+    .footer__links a { font-size: .875rem; color: rgba(255,255,255,.6); transition: color .15s; }
+    .footer__links a:hover { color: #fff; }
+    .footer__socials { display: flex; gap: .75rem; margin-top: 1.5rem; }
+    .footer__social {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: rgba(255,255,255,.08); display: flex; align-items: center; justify-content: center;
+      color: rgba(255,255,255,.6); font-size: .9rem; transition: all .2s;
+    }
+    .footer__social:hover { background: var(--blue-600); color: #fff; }
+    .footer__bottom {
+      border-top: 1px solid rgba(255,255,255,.08);
+      padding: 1.5rem 0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+    }
+    .footer__copy { font-size: .8rem; }
+    .footer__seo-text {
+      font-size: .75rem; color: rgba(255,255,255,.35); max-width: 900px;
+      margin: 0 auto; text-align: center; padding-top: 1rem;
+      border-top: 1px solid rgba(255,255,255,.05); margin-top: 1.5rem;
+    }
+
+    /* â”€â”€ Scroll animation â”€â”€ */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity .6s ease, transform .6s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    /* â”€â”€ Responsive â”€â”€ */
+    @media (max-width: 1024px) {
+      .footer__grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 768px) {
+      .section { padding: 72px 0; }
+      .hero { padding: 120px 0 72px; }
+      .hero__inner { grid-template-columns: 1fr; }
+      .hero__visual { order: -1; }
+      .dashboard-mockup { max-width: 480px; margin: 0 auto; }
+      .about__grid { grid-template-columns: 1fr; gap: 3rem; }
+      .steps { grid-template-columns: 1fr; gap: 3rem; }
+      .steps::before { display: none; }
+      .footer__grid { grid-template-columns: 1fr 1fr; gap: 2rem; }
+      .navbar__links { display: none; }
+      .navbar__toggle { display: block; }
+      .about__stat-cards { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 480px) {
+      .footer__grid { grid-template-columns: 1fr; }
+      .about__stat-cards { grid-template-columns: 1fr 1fr; }
+      .hero__ctas { flex-direction: column; }
+      .btn-lg { width: 100%; justify-content: center; }
+      .final-cta__btns { flex-direction: column; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- â•â•â•â•â•â•â•â•â•â• NAVBAR â•â•â•â•â•â•â•â•â•â• -->
+<nav class="navbar" id="navbar" role="navigation" aria-label="Main navigation">
+  <div class="container">
+    <div class="navbar__inner">
+      <a href="/" class="navbar__brand" aria-label="SmartScheduler Home">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect width="32" height="32" rx="8" fill="#2563EB"/>
+          <rect x="7" y="9" width="18" height="2" rx="1" fill="white"/>
+          <rect x="7" y="14" width="12" height="2" rx="1" fill="white" opacity=".7"/>
+          <rect x="7" y="19" width="15" height="2" rx="1" fill="white" opacity=".5"/>
+          <circle cx="24" cy="23" r="5" fill="#22c55e"/>
+          <path d="M22 23l1.5 1.5L26 21" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        SmartScheduler
+      </a>
+
+      <ul class="navbar__links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#industries">Industries</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+
+      <div class="navbar__actions">
+        <a href="https://smartscheduler.in/?signin=1" class="btn btn-outline" style="padding:.6rem 1.25rem;font-size:.9rem;">Sign In</a>
+        <a href="#demo" class="btn btn-primary" style="padding:.6rem 1.25rem;font-size:.9rem;">Request Demo</a>
+      </div>
+
+      <button class="navbar__toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• HERO â•â•â•â•â•â•â•â•â•â• -->
+<section class="hero" aria-labelledby="hero-heading">
+  <div class="container">
+    <div class="hero__inner">
+      <div class="hero__content reveal">
+        <div class="hero__eyebrow">
+          <div class="hero__dot" aria-hidden="true"></div>
+          <span class="badge">âœ¦ AI-Powered Scheduling</span>
+        </div>
+
+        <h1 id="hero-heading">
+          <span class="gradient">AI-Powered Timetable</span><br/>
+          Generator for Schools<br/>and Colleges
+        </h1>
+
+        <p class="hero__sub">
+          Create conflict-free academic timetables in seconds using AI. Automate teacher allocation, classroom scheduling, lab management, and workload balancing â€” all from one dashboard.
+        </p>
+
+        <div class="hero__ctas">
+          <a href="#demo" class="btn btn-primary btn-lg">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.89L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
+            Request Demo
+          </a>
+          <a href="https://smartscheduler.in/?signin=1" class="btn btn-outline btn-lg">
+            Get Started Free
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+        </div>
+
+        <div class="hero__trust">
+          <span class="hero__trust-item">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            No credit card required
+          </span>
+          <span class="hero__trust-item">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Free to start
+          </span>
+          <span class="hero__trust-item">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            Setup in minutes
+          </span>
+        </div>
+      </div>
+
+      <!-- Dashboard Mockup -->
+      <div class="hero__visual reveal" style="transition-delay:.15s">
+        <div style="position:relative">
+          <div class="dashboard-mockup" role="img" aria-label="SmartScheduler timetable dashboard preview">
+            <div class="mockup-header">
+              <div class="mockup-dot" style="background:#ff5f57"></div>
+              <div class="mockup-dot" style="background:#febc2e"></div>
+              <div class="mockup-dot" style="background:#28c840"></div>
+              <span class="mockup-title">SmartScheduler â€” Class X-A Weekly Timetable</span>
+            </div>
+            <div class="mockup-body">
+              <div class="mockup-grid">
+                <div class="mockup-cell mockup-cell--header">Period</div>
+                <div class="mockup-cell mockup-cell--header">Mon</div>
+                <div class="mockup-cell mockup-cell--header">Tue</div>
+                <div class="mockup-cell mockup-cell--header">Wed</div>
+                <div class="mockup-cell mockup-cell--header">Thu</div>
+                <div class="mockup-cell mockup-cell--header">Fri</div>
+
+                <div class="mockup-cell mockup-cell--time">8â€“9 AM</div>
+                <div class="mockup-cell mockup-cell--blue">Maths<br/><span style="opacity:.7;font-size:.6rem">Mr. Sharma</span></div>
+                <div class="mockup-cell mockup-cell--green">Science<br/><span style="opacity:.7;font-size:.6rem">Ms. Priya</span></div>
+                <div class="mockup-cell mockup-cell--purple">English<br/><span style="opacity:.7;font-size:.6rem">Ms. Rao</span></div>
+                <div class="mockup-cell mockup-cell--amber">History<br/><span style="opacity:.7;font-size:.6rem">Mr. Das</span></div>
+                <div class="mockup-cell mockup-cell--blue">Maths<br/><span style="opacity:.7;font-size:.6rem">Mr. Sharma</span></div>
+
+                <div class="mockup-cell mockup-cell--time">9â€“10 AM</div>
+                <div class="mockup-cell mockup-cell--green">Science<br/><span style="opacity:.7;font-size:.6rem">Ms. Priya</span></div>
+                <div class="mockup-cell mockup-cell--purple">English<br/><span style="opacity:.7;font-size:.6rem">Ms. Rao</span></div>
+                <div class="mockup-cell mockup-cell--blue">Maths<br/><span style="opacity:.7;font-size:.6rem">Mr. Sharma</span></div>
+                <div class="mockup-cell mockup-cell--rose">Lab<br/><span style="opacity:.7;font-size:.6rem">Ms. Priya</span></div>
+                <div class="mockup-cell mockup-cell--amber">History<br/><span style="opacity:.7;font-size:.6rem">Mr. Das</span></div>
+
+                <div class="mockup-cell mockup-cell--time">10â€“11 AM</div>
+                <div class="mockup-cell mockup-cell--purple">English<br/><span style="opacity:.7;font-size:.6rem">Ms. Rao</span></div>
+                <div class="mockup-cell mockup-cell--amber">History<br/><span style="opacity:.7;font-size:.6rem">Mr. Das</span></div>
+                <div class="mockup-cell mockup-cell--green">Science<br/><span style="opacity:.7;font-size:.6rem">Ms. Priya</span></div>
+                <div class="mockup-cell mockup-cell--blue">Maths<br/><span style="opacity:.7;font-size:.6rem">Mr. Sharma</span></div>
+                <div class="mockup-cell mockup-cell--purple">English<br/><span style="opacity:.7;font-size:.6rem">Ms. Rao</span></div>
+              </div>
+              <div class="mockup-stats">
+                <div class="mockup-stat"><div class="mockup-stat__val">0</div><div class="mockup-stat__lbl">Conflicts</div></div>
+                <div class="mockup-stat"><div class="mockup-stat__val">12</div><div class="mockup-stat__lbl">Teachers</div></div>
+                <div class="mockup-stat"><div class="mockup-stat__val">8</div><div class="mockup-stat__lbl">Classes</div></div>
+                <div class="mockup-stat"><div class="mockup-stat__val">3s</div><div class="mockup-stat__lbl">Generated</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="mockup-badge" aria-hidden="true">âœ“ Zero Conflicts Detected!</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• TRUSTED BY â•â•â•â•â•â•â•â•â•â• -->
+<section class="section section--alt" aria-labelledby="trusted-heading">
+  <div class="container">
+    <span class="section-label"><span class="badge">Trusted By</span></span>
+    <h2 class="section-title" id="trusted-heading">Built for Educational Institutions of Every Size</h2>
+    <p class="section-sub">From small schools to large universities, SmartScheduler adapts to your institution's unique scheduling needs.</p>
+
+    <div class="trusted-cards reveal">
+      <div class="trusted-card">
+        <div class="trusted-card__icon" aria-hidden="true">ðŸ«</div>
+        <div class="trusted-card__title">Schools</div>
+        <div class="trusted-card__sub">CBSE, ICSE & State Board Schools</div>
+      </div>
+      <div class="trusted-card">
+        <div class="trusted-card__icon" aria-hidden="true">ðŸ›ï¸</div>
+        <div class="trusted-card__title">Colleges</div>
+        <div class="trusted-card__sub">Degree & Engineering Colleges</div>
+      </div>
+      <div class="trusted-card">
+        <div class="trusted-card__icon" aria-hidden="true">ðŸŽ“</div>
+        <div class="trusted-card__title">Universities</div>
+        <div class="trusted-card__sub">Multi-department Universities</div>
+      </div>
+      <div class="trusted-card">
+        <div class="trusted-card__icon" aria-hidden="true">ðŸ“š</div>
+        <div class="trusted-card__title">Training Institutes</div>
+        <div class="trusted-card__sub">Coaching & Skill Development</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• ABOUT â•â•â•â•â•â•â•â•â•â• -->
+<section class="section" id="about" aria-labelledby="about-heading">
+  <div class="container">
+    <div class="about__grid">
+      <div class="reveal">
+        <span class="badge" style="margin-bottom:1.25rem;display:inline-flex">The Problem</span>
+        <h2 class="section-title" id="about-heading" style="text-align:left;margin-bottom:1rem">Simplify Academic Scheduling with Artificial Intelligence</h2>
+        <p style="color:var(--slate-500);margin-bottom:2rem;line-height:1.75">Manual timetable creation is time-consuming, error-prone, and creates unnecessary conflicts. SmartScheduler's AI eliminates every scheduling headache instantly.</p>
+
+        <div class="about__challenges">
+          <div class="challenge-item">
+            <div class="challenge-item__icon challenge-item__icon--red" aria-hidden="true">âš ï¸</div>
+            <div>
+              <div class="challenge-item__title">Faculty Conflicts & Double-Booking</div>
+              <div class="challenge-item__desc">Manual scheduling often places the same teacher in two rooms simultaneously. Our AI eliminates this entirely.</div>
+            </div>
+          </div>
+          <div class="challenge-item">
+            <div class="challenge-item__icon challenge-item__icon--amber" aria-hidden="true">â±ï¸</div>
+            <div>
+              <div class="challenge-item__title">Weeks of Manual Work</div>
+              <div class="challenge-item__desc">Creating schedules for 50+ teachers and 20+ classes manually takes weeks. SmartScheduler does it in seconds.</div>
+            </div>
+          </div>
+          <div class="challenge-item">
+            <div class="challenge-item__icon challenge-item__icon--blue" aria-hidden="true">ðŸ”¬</div>
+            <div>
+              <div class="challenge-item__title">Complex Lab & Room Management</div>
+              <div class="challenge-item__desc">Lab sessions, shared rooms, and specialized classrooms require careful coordination. Our AI handles it automatically.</div>
+            </div>
+          </div>
+          <div class="challenge-item">
+            <div class="challenge-item__icon challenge-item__icon--purple" aria-hidden="true">ðŸ“Š</div>
+            <div>
+              <div class="challenge-item__title">Unbalanced Workload Distribution</div>
+              <div class="challenge-item__desc">Manual scheduling often gives some teachers too many periods while others are underutilized. AI balances workloads fairly.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="about__stat-cards reveal" style="transition-delay:.2s">
+        <div class="stat-card">
+          <div class="stat-card__num">90%</div>
+          <div class="stat-card__lbl">Time Saved in Scheduling</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__num">0</div>
+          <div class="stat-card__lbl">Scheduling Conflicts</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__num">3s</div>
+          <div class="stat-card__lbl">Timetable Generation Time</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__num">500+</div>
+          <div class="stat-card__lbl">Institutions Served</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• FEATURES â•â•â•â•â•â•â•â•â•â• -->
+<section class="section section--alt" id="features" aria-labelledby="features-heading">
+  <div class="container">
+    <span class="section-label"><span class="badge">Features</span></span>
+    <h2 class="section-title" id="features-heading">Smart Features That Save Time</h2>
+    <p class="section-sub">Everything you need to generate, manage, and share conflict-free academic timetables â€” all in one platform.</p>
+
+    <div class="features-grid reveal">
+      <article class="feature-card">
+        <div class="feature-card__icon feature-card__icon--1" aria-hidden="true">âš¡</div>
+        <h3>Conflict-Free Scheduling</h3>
+        <p>Our AI engine automatically detects and resolves all teacher, room, and subject conflicts â€” ensuring a perfectly valid timetable every time.</p>
+        <a href="#features" class="feature-card__link">Learn more â†’</a>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-card__icon feature-card__icon--2" aria-hidden="true">âš–ï¸</div>
+        <h3>Faculty Workload Management</h3>
+        <p>Automatically distribute teaching hours fairly across all faculty members, respecting individual constraints and preferences.</p>
+        <a href="#features" class="feature-card__link">Learn more â†’</a>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-card__icon feature-card__icon--3" aria-hidden="true">ðŸ”¬</div>
+        <h3>Lab Scheduling</h3>
+        <p>Schedule laboratory sessions with specialized room assignments, ensuring no two groups share the same lab at the same time.</p>
+        <a href="#features" class="feature-card__link">Learn more â†’</a>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-card__icon feature-card__icon--4" aria-hidden="true">ðŸ“…</div>
+        <h3>Multiple Timetable Views</h3>
+        <p>View timetables by class, teacher, or room. Switch between weekly, daily, and faculty-specific layouts instantly.</p>
+        <a href="#features" class="feature-card__link">Learn more â†’</a>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-card__icon feature-card__icon--5" aria-hidden="true">ðŸ”„</div>
+        <h3>One-Click Regeneration</h3>
+        <p>Changed a teacher or added a new class? Regenerate the entire timetable in one click without losing your custom configurations.</p>
+        <a href="#features" class="feature-card__link">Learn more â†’</a>
+      </article>
+
+      <article class="feature-card">
+        <div class="feature-card__icon feature-card__icon--6" aria-hidden="true">ðŸ“„</div>
+        <h3>PDF Export & Sharing</h3>
+        <p>Export individual or bulk timetables as clean, print-ready PDFs. Share with teachers and students instantly via link or download.</p>
+        <a href="#features" class="feature-card__link">Learn more â†’</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• HOW IT WORKS â•â•â•â•â•â•â•â•â•â• -->
+<section class="section" id="how-it-works" aria-labelledby="hiw-heading">
+  <div class="container">
+    <span class="section-label"><span class="badge">How It Works</span></span>
+    <h2 class="section-title" id="hiw-heading">Create Timetables in 3 Simple Steps</h2>
+    <p class="section-sub">No technical expertise needed. Our intuitive platform guides you from setup to a fully generated timetable in minutes.</p>
+
+    <div class="steps reveal">
+      <div class="step">
+        <div class="step__num" aria-label="Step 1">1</div>
+        <h3>Configure Your Institution</h3>
+        <p>Add teachers, subjects, classrooms, classes, and scheduling constraints. Import existing data or set it up fresh.</p>
+      </div>
+      <div class="step">
+        <div class="step__num" aria-label="Step 2">2</div>
+        <h3>Generate Automatically</h3>
+        <p>Click "Generate" and let our AI create a perfectly optimized, conflict-free timetable across all classes and teachers.</p>
+      </div>
+      <div class="step">
+        <div class="step__num" aria-label="Step 3">3</div>
+        <h3>Review, Edit & Publish</h3>
+        <p>Fine-tune any slot manually, approve the schedule, and publish or export as PDF for your institution.</p>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:3rem">
+      <a href="#demo" class="btn btn-primary btn-lg reveal">Start Generating Free â†’</a>
+    </div>
+  </div>
+</section>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• BENEFITS â•â•â•â•â•â•â•â•â•â• -->
+<section class="section section--dark" id="benefits" aria-labelledby="benefits-heading">
+  <div class="container">
+    <span class="section-label"><span class="badge" style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.9);border-color:rgba(255,255,255,.2)">Why SmartScheduler</span></span>
+    <h2 class="section-title section-title--light" id="benefits-heading">Why Institutions Choose SmartScheduler</h2>
+    <p class="section-sub section-sub--light">Real results from institutions that transformed their academic planning with AI-powered scheduling.</p>
+
+    <div class="benefits-grid reveal">
+      <div class="benefit-card">
+        <div class="benefit-card__icon" aria-hidden="true">âš¡</div>
+        <div class="benefit-card__num">90%</div>
+        <div class="benefit-card__title">Time Saved</div>
+        <div class="benefit-card__desc">Reduce scheduling time from weeks to seconds with automated AI generation.</div>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-card__icon" aria-hidden="true">âœ…</div>
+        <div class="benefit-card__num">100%</div>
+        <div class="benefit-card__title">Conflict-Free</div>
+        <div class="benefit-card__desc">Guaranteed zero scheduling conflicts across all teachers, rooms, and subjects.</div>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-card__icon" aria-hidden="true">ðŸ“ˆ</div>
+        <div class="benefit-card__num">3Ã—</div>
+        <div class="benefit-card__title">Better Utilization</div>
+        <div class="benefit-card__desc">Maximize classroom and lab resource utilization across your institution.</div>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-card__icon" aria-hidden="true">ðŸš€</div>
+        <div class="benefit-card__num">10Ã—</div>
+        <div class="benefit-card__title">Admin Efficiency</div>
+        <div class="benefit-card__desc">Free your administrative staff from repetitive scheduling tasks permanently.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• INDUSTRIES â•â•â•â•â•â•â•â•â•â• -->
+<section class="section section--alt" id="industries" aria-labelledby="industries-heading">
+  <div class="container">
+    <span class="section-label"><span class="badge">Industries</span></span>
+    <h2 class="section-title" id="industries-heading">Designed for Every Educational Institution</h2>
+    <p class="section-sub">SmartScheduler's flexible engine adapts to the unique scheduling requirements of any educational organization.</p>
+
+    <div class="industries-grid reveal">
+      <div class="industry-pill">ðŸ« CBSE Schools</div>
+      <div class="industry-pill">ðŸ« ICSE Schools</div>
+      <div class="industry-pill">ðŸŒ International Schools</div>
+      <div class="industry-pill">ðŸ›ï¸ Degree Colleges</div>
+      <div class="industry-pill">âš™ï¸ Engineering Colleges</div>
+      <div class="industry-pill">ðŸŽ“ Universities</div>
+      <div class="industry-pill">ðŸ“š Coaching Institutes</div>
+      <div class="industry-pill">ðŸ”¬ Polytechnics</div>
+      <div class="industry-pill">ðŸ’Š Medical Colleges</div>
+      <div class="industry-pill">ðŸŽ¨ Arts Colleges</div>
+      <div class="industry-pill">âš–ï¸ Law Schools</div>
+      <div class="industry-pill">ðŸ¥ Nursing Colleges</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• TESTIMONIALS â•â•â•â•â•â•â•â•â•â• -->
+<section class="section" id="testimonials" aria-labelledby="testimonials-heading">
+  <div class="container">
+    <span class="section-label"><span class="badge">Testimonials</span></span>
+    <h2 class="section-title" id="testimonials-heading">What Our Users Say</h2>
+    <p class="section-sub">Thousands of educators trust SmartScheduler to manage their academic scheduling efficiently.</p>
+
+    <div class="testimonials-grid reveal">
+      <article class="testimonial-card">
+        <div class="testimonial-card__stars" aria-label="5 stars">â˜…â˜…â˜…â˜…â˜…</div>
+        <blockquote class="testimonial-card__quote">"SmartScheduler reduced our timetable preparation time from 3 weeks to literally 3 minutes. The AI handles all the conflicts automatically â€” it's incredible."</blockquote>
+        <div class="testimonial-card__author">
+          <div class="testimonial-card__avatar" style="background:linear-gradient(135deg,#2563eb,#1d4ed8)" aria-hidden="true">R</div>
+          <div>
+            <div class="testimonial-card__name">Dr. Rajesh Kumar</div>
+            <div class="testimonial-card__role">Principal Â· St. Mary's CBSE School, Chennai</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="testimonial-card">
+        <div class="testimonial-card__stars" aria-label="5 stars">â˜…â˜…â˜…â˜…â˜…</div>
+        <blockquote class="testimonial-card__quote">"Managing 80 faculty members across 6 departments was a nightmare. SmartScheduler's AI generates a perfect timetable with zero conflicts every semester."</blockquote>
+        <div class="testimonial-card__author">
+          <div class="testimonial-card__avatar" style="background:linear-gradient(135deg,#7c3aed,#5b21b6)" aria-hidden="true">P</div>
+          <div>
+            <div class="testimonial-card__name">Prof. Priya Sharma</div>
+            <div class="testimonial-card__role">HOD Â· Genesis Engineering College, Hyderabad</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="testimonial-card">
+        <div class="testimonial-card__stars" aria-label="5 stars">â˜…â˜…â˜…â˜…â˜…</div>
+        <blockquote class="testimonial-card__quote">"The substitute teacher feature is a game changer. When a teacher is absent, the system suggests the best available replacement immediately. Outstanding software!"</blockquote>
+        <div class="testimonial-card__author">
+          <div class="testimonial-card__avatar" style="background:linear-gradient(135deg,#059669,#065f46)" aria-hidden="true">S</div>
+          <div>
+            <div class="testimonial-card__name">Ms. Sunitha Reddy</div>
+            <div class="testimonial-card__role">Vice Principal Â· Sunrise Degree College, Bangalore</div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• FAQ â•â•â•â•â•â•â•â•â•â• -->
+<section class="section section--alt" id="faq" aria-labelledby="faq-heading">
+  <div class="container">
+    <span class="section-label"><span class="badge">FAQ</span></span>
+    <h2 class="section-title" id="faq-heading">Frequently Asked Questions</h2>
+    <p class="section-sub">Everything you need to know about SmartScheduler's AI timetable generator.</p>
+
+    <div class="faq-list reveal">
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          What is SmartScheduler?
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-answer" role="region">
+          <p>SmartScheduler is an AI-powered timetable management software that helps educational institutions automatically generate conflict-free academic timetables in seconds. It handles teacher allocation, classroom scheduling, lab management, substitute teacher assignments, and workload balancing â€” all from a single cloud-based dashboard.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          Who can use SmartScheduler?
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-answer" role="region">
+          <p>SmartScheduler is designed for any educational institution â€” schools (CBSE, ICSE, State Board), junior colleges, degree colleges, engineering colleges, medical colleges, universities, and training institutes. Whether you have 10 teachers or 1,000, our platform scales with you.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          Does SmartScheduler support lab scheduling?
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-answer" role="region">
+          <p>Yes, SmartScheduler fully supports lab scheduling. You can define lab sessions, assign specific rooms and lab facilities, set batch sizes, and the AI automatically ensures no conflicts with regular classroom periods or other lab sessions. Science labs, computer labs, and language labs are all supported.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          Can I export timetables as PDF?
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-answer" role="region">
+          <p>Yes, SmartScheduler allows you to export timetables as clean, print-ready PDF files. You can export individual class timetables, teacher-wise schedules, or the complete institutional timetable. Prime subscribers get watermark-free exports.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          Is SmartScheduler cloud-based?
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-answer" role="region">
+          <p>Yes, SmartScheduler is fully cloud-based and accessible from any device with a modern web browser â€” no installation required. Your timetable data is securely stored in the cloud and always available to authorized users. Changes made by administrators are immediately visible to all staff.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-question" aria-expanded="false">
+          Can I manually edit the generated timetable?
+          <span class="faq-icon" aria-hidden="true">+</span>
+        </button>
+        <div class="faq-answer" role="region">
+          <p>Absolutely. After the AI generates your timetable, you have full control to manually review and edit any slot. You can reassign teachers, swap periods, add free periods, and make adjustments before publishing. The system highlights any new conflicts as you edit, ensuring your final timetable remains valid.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• FINAL CTA â•â•â•â•â•â•â•â•â•â• -->
+<section class="final-cta" id="demo" aria-labelledby="cta-heading">
+  <div class="container" style="position:relative;z-index:1">
+    <h2 id="cta-heading">Ready to Eliminate Timetable Chaos?</h2>
+    <p>Generate accurate, conflict-free schedules in seconds and transform academic planning at your institution forever.</p>
+    <div class="final-cta__btns">
+      <a href="https://smartscheduler.in/?signin=1" class="btn btn-white btn-lg">
+        Get Started Free
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <a href="mailto:admin.campusscheduler@gmail.com" class="btn btn-outline-white btn-lg" id="contact">
+        Contact Us
+      </a>
+    </div>
+    <p style="margin-top:1.5rem;font-size:.85rem;opacity:.6">No credit card required Â· Free forever plan Â· Setup in 5 minutes</p>
+  </div>
+</section>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• FOOTER â•â•â•â•â•â•â•â•â•â• -->
+<footer class="footer" role="contentinfo">
+  <div class="container">
+    <div class="footer__top">
+      <div class="footer__grid">
+        <div>
+          <div class="footer__brand" aria-label="SmartScheduler">
+            <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <rect width="32" height="32" rx="8" fill="#2563EB"/>
+              <rect x="7" y="9" width="18" height="2" rx="1" fill="white"/>
+              <rect x="7" y="14" width="12" height="2" rx="1" fill="white" opacity=".7"/>
+              <rect x="7" y="19" width="15" height="2" rx="1" fill="white" opacity=".5"/>
+              <circle cx="24" cy="23" r="5" fill="#22c55e"/>
+              <path d="M22 23l1.5 1.5L26 21" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            SmartScheduler
+          </div>
+          <p class="footer__desc">AI-powered timetable management software for schools, colleges, and universities. Create conflict-free academic schedules in seconds.</p>
+          <div class="footer__socials">
+            <a href="#" class="footer__social" aria-label="Twitter">
+              <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            </a>
+            <a href="#" class="footer__social" aria-label="LinkedIn">
+              <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+            </a>
+            <a href="#" class="footer__social" aria-label="YouTube">
+              <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+            </a>
+          </div>
+        </div>
+
+        <div>
+          <div class="footer__col-title">Product</div>
+          <ul class="footer__links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#how-it-works">How It Works</a></li>
+            <li><a href="#">Pricing</a></li>
+            <li><a href="#">Changelog</a></li>
+            <li><a href="#">Roadmap</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <div class="footer__col-title">Company</div>
+          <ul class="footer__links">
+            <li><a href="#">About Us</a></li>
+            <li><a href="#">Blog</a></li>
+            <li><a href="#contact">Contact</a></li>
+            <li><a href="#">Careers</a></li>
+            <li><a href="#">Press</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <div class="footer__col-title">Legal</div>
+          <ul class="footer__links">
+            <li><a href="#">Privacy Policy</a></li>
+            <li><a href="#">Terms &amp; Conditions</a></li>
+            <li><a href="#">Cookie Policy</a></li>
+            <li><a href="#">Security</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer__bottom">
+      <span class="footer__copy">Â© 2025 SmartScheduler. All rights reserved.</span>
+      <span class="footer__copy">Made with â¤ï¸ for educators everywhere</span>
+    </div>
+
+    <p class="footer__seo-text">
+      SmartScheduler is an AI-powered timetable management software that helps schools, colleges, and universities automate academic scheduling, optimize faculty workload, manage classrooms and laboratories, and create conflict-free timetables. Our automatic timetable generator supports CBSE schools, ICSE schools, engineering colleges, degree colleges, and universities across India.
+    </p>
+  </div>
+</footer>
+
+
+<!-- â•â•â•â•â•â•â•â•â•â• SCRIPTS â•â•â•â•â•â•â•â•â•â• -->
+<script>
+  // Navbar scroll effect
+  const navbar = document.getElementById('navbar');
+  window.addEventListener('scroll', () => {
+    navbar.classList.toggle('scrolled', window.scrollY > 20);
+  }, { passive: true });
+
+  // FAQ accordion
+  document.querySelectorAll('.faq-question').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = btn.closest('.faq-item');
+      const isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item.open').forEach(i => {
+        i.classList.remove('open');
+        i.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+      });
+      if (!isOpen) {
+        item.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+
+  // Scroll reveal
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12 });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // Mobile nav toggle (simple show/hide)
+  const toggle = document.getElementById('navToggle');
+  const links = document.querySelector('.navbar__links');
+  toggle.addEventListener('click', () => {
+    const expanded = toggle.getAttribute('aria-expanded') === 'true';
+    toggle.setAttribute('aria-expanded', String(!expanded));
+    if (!expanded) {
+      links.style.cssText = 'display:flex;flex-direction:column;position:absolute;top:68px;left:0;right:0;background:#fff;padding:1.5rem;gap:1.25rem;border-bottom:1px solid #e2e8f0;box-shadow:0 8px 24px rgba(0,0,0,.1);z-index:99';
+    } else {
+      links.style.cssText = '';
+    }
+  });
+</script>
+
+</body>
+</html>

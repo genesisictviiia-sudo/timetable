@@ -1,9 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-export default function AddTeacherModal({ open, onClose, onSave }) {
+export default function AddTeacherModal({ open, onClose, onSave, teacher = null }) {
+  const isEdit = Boolean(teacher);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setName(teacher?.name ?? "");
+    setPhone(teacher?.phone ?? "");
+    setEmail(teacher?.email ?? "");
+  }, [open, teacher]);
 
   if (!open) return null;
 
@@ -27,7 +35,7 @@ export default function AddTeacherModal({ open, onClose, onSave }) {
     <div className="modal-overlay" role="presentation" onClick={onClose}>
       <div className="modal-card" role="dialog" aria-labelledby="add-teacher-title" onClick={(e) => e.stopPropagation()}>
         <h3 id="add-teacher-title" className="modal-title">
-          Add teacher
+          {isEdit ? "Edit teacher" : "Add teacher"}
         </h3>
         <div className="settings-form-compact settings-form-stack">
           <label>

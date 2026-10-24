@@ -103,8 +103,8 @@ export function validateCsvFormat(rows, expectedHeaders) {
 export const CLASSES_CSV_HEADERS = ["Grade", "Section", "Class title"];
 export const CLASSES_CSV_SAMPLE = ["10", "A", "Grade 10 Section A"];
 
-export const CLASS_LESSONS_CSV_HEADERS = ["Teacher", "Subject", "Lessons per week", "Additional teachers"];
-export const CLASS_LESSONS_CSV_SAMPLE = ["Sample Teacher", "Mathematics", "5", ""];
+export const CLASS_LESSONS_CSV_HEADERS = ["Teacher", "Subject", "Lessons per week", "Additional teachers", "Additional classes"];
+export const CLASS_LESSONS_CSV_SAMPLE = ["Sample Teacher", "Mathematics", "5", "", ""];
 
 export const SUBJECTS_CSV_HEADERS = ["Name", "Shortcut"];
 export const SUBJECTS_CSV_SAMPLE = ["Mathematics", "Math"];

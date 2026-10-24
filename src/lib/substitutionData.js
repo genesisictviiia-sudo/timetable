@@ -44,11 +44,14 @@ function buildTeachesMap(teachers) {
     const pairs = new Set();
 
     for (const lesson of t.lessons || []) {
-      const classLabel = norm(lesson.classLabel);
       const subject = norm(lesson.subject);
-      if (!classLabel) continue;
-      classes.add(classLabel.toUpperCase());
-      if (subject) pairs.add(normKey(classLabel, subject));
+      const classLabels = [lesson.classLabel, ...(Array.isArray(lesson.additionalClasses) ? lesson.additionalClasses : [])]
+        .map(norm)
+        .filter(Boolean);
+      for (const classLabel of classLabels) {
+        classes.add(classLabel.toUpperCase());
+        if (subject) pairs.add(normKey(classLabel, subject));
+      }
     }
 
     teachesMap[t.name] = {

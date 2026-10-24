@@ -1,4 +1,5 @@
 import { createPortal } from "react-dom";
+import { getCurrentUser } from "../lib/authStorage";
 
 function PeriodHeader({ col }) {
   return (
@@ -31,6 +32,7 @@ export default function PrintableTimetable({
   const labelPrefix = kind === "class" ? "Class" : "Teacher";
   const pageSize = orientation === "portrait" ? "A4 portrait" : "A4 landscape";
   const pageMargin = perPage >= 4 ? "4mm" : perPage >= 2 ? "5mm" : "8mm";
+  const isFree = !["prime", "pro"].includes(getCurrentUser()?.userType || "free");
 
   return createPortal(
     <>
@@ -43,7 +45,7 @@ export default function PrintableTimetable({
         }
       `}</style>
       <div
-        className={`print-sheet print-sheet--per-${perPage} print-sheet--${orientation}`}
+        className={`print-sheet print-sheet--per-${perPage} print-sheet--${orientation}${isFree ? " print-sheet--watermark" : ""}`}
       >
         {items.map((item, idx) => (
           <article

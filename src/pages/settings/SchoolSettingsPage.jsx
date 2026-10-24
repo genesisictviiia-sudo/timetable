@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import RowMoveButtons from "../../components/RowMoveButtons";
 import { moveRowAtIndex } from "../../lib/reorderRows";
 import { defaultSchoolConstraints, normalizeSchoolConstraints, loadSchoolStorageRaw, saveSchoolStorageRaw, clearSchoolStorage, SCHOOL_STORAGE_KEY } from "../../lib/settingsStorage";
+import { flushPendingSyncs } from "../../lib/userDataStorage";
 import "../../App.css";
 
 export { SCHOOL_STORAGE_KEY };
@@ -246,6 +247,7 @@ export default function SchoolSettingsPage() {
     };
 
     saveSchoolStorageRaw(cleanSchool);
+    flushPendingSyncs();
     setSchool(cleanSchool);
 
     alert("Latest school settings saved successfully.");

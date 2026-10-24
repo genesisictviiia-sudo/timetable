@@ -11,6 +11,7 @@ import {
 } from "../../lib/csvSample";
 import { moveRowById } from "../../lib/reorderRows";
 import { clearSubjectsList, loadSubjects, saveSubjectsList } from "../../lib/settingsStorage";
+import { flushPendingSyncs } from "../../lib/userDataStorage";
 import "../../App.css";
 
 function newSubject() {
@@ -106,11 +107,27 @@ export default function SubjectsSettingsPage() {
       timeOffGrid: r.timeOffGrid ?? null,
     }));
     saveSubjectsList(payload);
+    flushPendingSyncs();
     alert("Subjects database saved.");
   };
 
   const saveTimeOffGrid = (subjectId, timeOffGrid) => {
-    setRows((prev) => prev.map((r) => (r.id === subjectId ? { ...r, timeOffGrid } : r)));
+    setRows((prev) => {
+      const next = prev.map((r) => (r.id === subjectId ? { ...r, timeOffGrid } : r));
+      const filled = next.filter((r) => r.name.trim());
+      if (filled.length) {
+        saveSubjectsList(
+          filled.map((r) => ({
+            id: r.id,
+            name: r.name.trim(),
+            shortName: (r.shortName || r.name).trim(),
+            timeOffGrid: r.timeOffGrid ?? null,
+          }))
+        );
+        flushPendingSyncs();
+      }
+      return next;
+    });
   };
 
   const openTimeOff = (row) => {

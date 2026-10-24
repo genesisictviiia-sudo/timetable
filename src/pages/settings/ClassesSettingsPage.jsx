@@ -11,6 +11,7 @@ import {
 } from "../../lib/csvSample";
 import { moveRowById } from "../../lib/reorderRows";
 import { getClassLessonStats, loadClassesStorageRaw, saveClassesStorageRaw } from "../../lib/settingsStorage";
+import { flushPendingSyncs } from "../../lib/userDataStorage";
 import "../../App.css";
 
 function newRow() {
@@ -161,16 +162,31 @@ export default function ClassesSettingsPage() {
       }
     }
 
+    // Load existing raw data to preserve classTeacher/classTeacherSubject fields
+    const existingRaw = loadClassesStorageRaw();
+    const existingList = Array.isArray(existingRaw)
+      ? existingRaw
+      : Array.isArray(existingRaw?.classes)
+      ? existingRaw.classes
+      : [];
+    const existingById = new Map(existingList.map((c) => [c.id, c]));
+
     const payload = {
-      classes: rows.map((r) => ({
-        id: r.id,
-        grade: String(r.grade).trim(),
-        section: String(r.section).trim(),
-        title: String(r.title).trim(),
-      })),
+      classes: rows.map((r) => {
+        const existing = existingById.get(r.id) || {};
+        return {
+          id: r.id,
+          grade: String(r.grade).trim(),
+          section: String(r.section).trim(),
+          title: String(r.title).trim(),
+          classTeacher: existing.classTeacher || "",
+          classTeacherSubject: existing.classTeacherSubject || "",
+        };
+      }),
     };
 
     saveClassesStorageRaw(payload);
+    flushPendingSyncs();
     setRows((prev) => prev.map((r) => ({ ...r, selected: false })));
     alert("Class list saved successfully.");
   };
