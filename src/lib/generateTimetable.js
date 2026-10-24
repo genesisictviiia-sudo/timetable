@@ -581,21 +581,20 @@ function findBlockingCards(task, day, period, state, instances) {
  * who is busy in a completely unrelated class, the actual common blocker for
  * a lesson shared by many teachers — removes them all at once, then verifies
  * every task in the group now legally fits. Restores everything and returns
- * null if not. `allowBumpingRestricted` controls whether a blocker with its
- * own subject/teacher time-off restriction may be displaced — false on the
- * first, protective attempt; true only as the guaranteed-placement fallback
- * once every slot has failed under full protection.
+ * null if not.
+ *
+ * A fixed lesson, another group's lesson, or any lesson with its own
+ * subject/teacher time-off restriction is NEVER displaced — restricted
+ * lessons are permanent once placed, with no last-resort exception.
  */
-function tryGroupSwapPlan(group, instances, state, day, period, level, allowBumpingRestricted) {
+function tryGroupSwapPlan(group, instances, state, day, period, level) {
   const blockers = new Map();
 
   for (const task of group) {
     if (canPlace(task, day, period, state, level.flags)) continue;
     for (const blocker of findBlockingCards(task, day, period, state, instances)) {
       if (blocker.groupId || blocker.fixed) return null;
-      if (!allowBumpingRestricted && (isSubjectRestricted(blocker, state) || isTeacherRestricted(blocker, state))) {
-        return null;
-      }
+      if (isSubjectRestricted(blocker, state) || isTeacherRestricted(blocker, state)) return null;
       blockers.set(blocker, blocker);
     }
   }
@@ -630,22 +629,17 @@ function applyGroupSwapPlan(group, day, period, state, levelId) {
 }
 
 /**
- * Tray-clearing rescue for multi-class (grouped) lessons — most importantly,
- * ones with a subject/teacher time-off restriction, which must never be left
- * unplaced. A group occurrence needs the SAME day/period to be legal in every
- * one of its classes at once, so for each slot tried, every class is checked:
- * free already, or occupied by a plain, unprotected lesson that can be bumped
- * out to make room. The whole plan is applied only if every class in the
- * group can be accommodated — never partially, which would desync the group.
+ * Tray-clearing rescue for multi-class (grouped) lessons. A group occurrence
+ * needs the SAME day/period to be legal in every one of its classes at once,
+ * so for each slot tried, every class is checked: free already, or occupied
+ * by a plain, unprotected lesson that can be bumped out to make room. The
+ * whole plan is applied only if every class in the group can be
+ * accommodated — never partially, which would desync the group.
  *
- * Two tiers, in order:
- *  1. Protective — never displaces a fixed lesson, another restricted lesson,
- *     or another group's lesson.
- *  2. Guaranteed fallback — only reached if tier 1 fails at EVERY slot. Still
- *     never touches a fixed or grouped lesson, but may now displace a plain
- *     restricted lesson too, so the grouped/restricted lesson itself is never
- *     left stranded in the tray. The displaced lesson re-enters the tray and
- *     gets its own turn in the single-class rescue right after this.
+ * Never displaces a fixed lesson, another group's lesson, or — with no
+ * exception, including as a last resort — any lesson with its own
+ * subject/teacher time-off restriction. Restricted lessons are permanent
+ * once placed.
  */
 function resolveGroupedTrayBySwapping(instances, state, daysPerWeek, periodsPerDay, runSeed) {
   const levels = createRelaxationLevels();
@@ -664,23 +658,20 @@ function resolveGroupedTrayBySwapping(instances, state, daysPerWeek, periodsPerD
     const slots = shuffleSlots(buildAllSlots(daysPerWeek, periodsPerDay), taskPlacementSeed(group[0], 500, runSeed));
     let placed = false;
 
-    for (const allowBumpingRestricted of [false, true]) {
-      if (placed) break;
-      for (let trial = 0; trial < GROUP_SWAP_TRIALS && !placed; trial++) {
-        const { day, period } = slots[trial % slots.length];
+    for (let trial = 0; trial < GROUP_SWAP_TRIALS && !placed; trial++) {
+      const { day, period } = slots[trial % slots.length];
 
-        for (const level of levels) {
-          // tryGroupSwapPlan already removed every blocking card on success —
-          // only the group's own lessons still need placing.
-          const blockers = tryGroupSwapPlan(group, instances, state, day, period, level, allowBumpingRestricted);
-          if (!blockers) continue;
-          applyGroupSwapPlan(group, day, period, state, level.id === "strict" ? null : level.id);
-          placed = true;
-          break;
-        }
+      for (const level of levels) {
+        // tryGroupSwapPlan already removed every blocking card on success —
+        // only the group's own lessons still need placing.
+        const blockers = tryGroupSwapPlan(group, instances, state, day, period, level);
+        if (!blockers) continue;
+        applyGroupSwapPlan(group, day, period, state, level.id === "strict" ? null : level.id);
+        placed = true;
+        break;
       }
     }
-    // Still stuck after both tiers exhaust every slot — a genuine scheduling
+    // Still stuck after exhausting every slot — a genuine scheduling
     // impossibility (e.g. the class is already at its weekly period capacity
     // with no room anywhere), left in the tray like any other.
   }
@@ -717,7 +708,7 @@ function isProtectedSlot(period, state) {
  * `excludeCells` prevents a chain from reusing the same cell twice (which
  * would make no sense and could loop).
  */
-function searchSwapChain(task, instances, classId, state, daysPerWeek, periodsPerDay, flags, allowDisplaceRestricted, depth, excludeCells) {
+function searchSwapChain(task, instances, classId, state, daysPerWeek, periodsPerDay, flags, depth, excludeCells) {
   // 1) A direct empty cell ends the chain successfully.
   for (let day = 0; day < daysPerWeek; day++) {
     for (let period = 0; period < periodsPerDay; period++) {
@@ -753,9 +744,7 @@ function searchSwapChain(task, instances, classId, state, daysPerWeek, periodsPe
       );
       if (!occupant || occupant.groupId || occupant.fixed) continue;
       if (occupant.subject === task.subject && occupant.lessonId === task.lessonId) continue;
-      if (!allowDisplaceRestricted && (isSubjectRestricted(occupant, state) || isTeacherRestricted(occupant, state))) {
-        continue;
-      }
+      if (isSubjectRestricted(occupant, state) || isTeacherRestricted(occupant, state)) continue;
 
       removeLesson(occupant, state);
       if (!canPlace(task, day, period, state, flags)) {
@@ -773,7 +762,6 @@ function searchSwapChain(task, instances, classId, state, daysPerWeek, periodsPe
         daysPerWeek,
         periodsPerDay,
         flags,
-        allowDisplaceRestricted,
         depth + 1,
         nextExclude
       );
@@ -801,15 +789,15 @@ function searchSwapChain(task, instances, classId, state, daysPerWeek, periodsPe
  * later. A chain is only ever committed once it's fully verified to resolve
  * every card involved — nothing is left half-displaced.
  *
- * Two tiers per card: first without touching any time-off restricted
- * lesson, then — only if that fails outright — allowing a restricted lesson
- * to be displaced too, so a genuinely resolvable tray never gets left stuck
- * just because the only path ran through a mildly-restricted lesson.
+ * A fixed lesson, the class-teacher's period-1 slot (while that rule is on),
+ * another group's lesson, or any lesson with its own subject/teacher
+ * time-off restriction is NEVER displaced — restricted lessons are
+ * permanent once placed, with no last-resort exception. A card that can
+ * only be freed by moving one of these stays in the tray.
  *
- * Multi-class (grouped) lessons are excluded on both sides — they must occupy
- * one shared slot across every class in the group, so single-class swaps
- * would tear the group apart (handled separately). Fixed lessons and the
- * class-teacher's period-1 slot (while that rule is on) are never displaced.
+ * Multi-class (grouped) lessons are excluded — they must occupy one shared
+ * slot across every class in the group, so single-class swaps would tear
+ * the group apart (handled separately by resolveGroupedTrayBySwapping).
  */
 function resolveTrayBySwapping(instances, state, daysPerWeek, periodsPerDay, runSeed) {
   const levels = createRelaxationLevels();
@@ -828,27 +816,11 @@ function resolveTrayBySwapping(instances, state, daysPerWeek, periodsPerDay, run
       trials++;
       if (task.placed) continue;
 
-      let resolved = false;
-      for (const allowDisplaceRestricted of [false, true]) {
-        if (resolved) break;
-        for (const level of levels) {
-          const chain = searchSwapChain(
-            task,
-            instances,
-            classId,
-            state,
-            daysPerWeek,
-            periodsPerDay,
-            level.flags,
-            allowDisplaceRestricted,
-            0,
-            new Set()
-          );
-          if (chain) {
-            if (level.id !== "strict") recordRelaxation(level.id, state);
-            resolved = true;
-            break;
-          }
+      for (const level of levels) {
+        const chain = searchSwapChain(task, instances, classId, state, daysPerWeek, periodsPerDay, level.flags, 0, new Set());
+        if (chain) {
+          if (level.id !== "strict") recordRelaxation(level.id, state);
+          break;
         }
       }
       // If not resolved, the card stays in the tray and the loop moves on —
