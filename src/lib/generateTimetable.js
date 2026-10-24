@@ -30,6 +30,7 @@ function createRelaxationLevels() {
         ignoreClassTeacherFirst: false,
         ignoreMaxPerDay: false,
         ignoreMaxConsecutive: false,
+        ignoreSameSubjectSameDay: false,
       },
     },
     {
@@ -39,6 +40,7 @@ function createRelaxationLevels() {
         ignoreClassTeacherFirst: false,
         ignoreMaxPerDay: false,
         ignoreMaxConsecutive: true,
+        ignoreSameSubjectSameDay: false,
       },
     },
     {
@@ -48,6 +50,17 @@ function createRelaxationLevels() {
         ignoreClassTeacherFirst: false,
         ignoreMaxPerDay: true,
         ignoreMaxConsecutive: true,
+        ignoreSameSubjectSameDay: false,
+      },
+    },
+    {
+      id: "relaxSameSubjectSameDay",
+      label: "Same subject twice in a day",
+      flags: {
+        ignoreClassTeacherFirst: false,
+        ignoreMaxPerDay: true,
+        ignoreMaxConsecutive: true,
+        ignoreSameSubjectSameDay: true,
       },
     },
     {
@@ -57,9 +70,25 @@ function createRelaxationLevels() {
         ignoreClassTeacherFirst: true,
         ignoreMaxPerDay: true,
         ignoreMaxConsecutive: true,
+        ignoreSameSubjectSameDay: true,
       },
     },
   ];
+}
+
+/** True if (classId, subject) already has a lesson placed on this day. */
+function subjectAlreadyOnDay(classId, subject, day, state) {
+  const row = state.classGrids[classId]?.[day];
+  if (!row) return false;
+  return row.some((cell) => cell && cell.subject === subject);
+}
+
+/** True once every school day already has at least one lesson of this subject. */
+function subjectCoversAllDays(classId, subject, state) {
+  for (let d = 0; d < state.daysPerWeek; d++) {
+    if (!subjectAlreadyOnDay(classId, subject, d, state)) return false;
+  }
+  return true;
 }
 
 function emptyClassGrid(daysPerWeek, periodsPerDay) {
@@ -339,6 +368,14 @@ function passesConsecutiveLimit(name, day, period, state, flags) {
 function canPlace(task, day, period, state, flags) {
   if (!areTeachersFree(task, day, period, state)) return false;
   if (!flags.ignoreSubjectAvailability && !isSubjectAvailable(task.subject, day, period, state)) return false;
+
+  // Each subject appears at most once per day for a class — unless its
+  // lessons/week exceeds the number of school days, in which case repeats
+  // are only allowed once EVERY day already has one occurrence (fill the
+  // whole week first, then double up, rather than stacking early).
+  if (!flags.ignoreSameSubjectSameDay && subjectAlreadyOnDay(task.classId, task.subject, day, state)) {
+    if (!subjectCoversAllDays(task.classId, task.subject, state)) return false;
+  }
 
   for (const name of task.teachers) {
     if (!flags.ignoreTeacherAvailability && !isTeacherAvailable(name, day, period, state)) return false;
@@ -1110,6 +1147,7 @@ function placeClassTeacherFirstPeriods(instances, state, classes, teachers, days
     ignoreMaxConsecutive: true,
     ignoreSubjectAvailability: true,
     ignoreTeacherAvailability: true,
+    ignoreSameSubjectSameDay: true,
   };
 
   for (const cls of classes) {
