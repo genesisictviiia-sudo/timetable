@@ -1059,6 +1059,24 @@ function buildLessonInstances(classes, classLessonsMap, teachers) {
 }
 
 /**
+ * Count how many day/period slots are currently legal (strict constraints)
+ * for every task in `group` simultaneously — a measure of how scarce this
+ * shared lesson's options are. Used to place the most-constrained groups
+ * first, before a less-constrained one happens to take their only slot.
+ */
+function countSharedLegalSlots(group, state, daysPerWeek, periodsPerDay) {
+  const strictFlags = createRelaxationLevels()[0].flags;
+  let n = 0;
+  for (let day = 0; day < daysPerWeek; day++) {
+    for (let period = 0; period < periodsPerDay; period++) {
+      const placements = group.map((task) => ({ task, day, period }));
+      if (canPlaceAll(placements, state, strictFlags)) n++;
+    }
+  }
+  return n;
+}
+
+/**
  * A multi-class lesson row (row.groupId set, mirrored into every class in the
  * group by propagateMultiClassLessons) must land on the same day/period in
  * every class — the same teacher(s) teach all those classes simultaneously.
@@ -1087,7 +1105,19 @@ function placeGroupedMultiClassLessons(instances, state, daysPerWeek, periodsPer
     groups.get(key).push(task);
   }
 
-  for (const group of groups.values()) {
+  // Process the most scarce groups first — e.g. when several restricted
+  // multi-class/multi-teacher groups compete for overlapping narrow windows,
+  // the one with the fewest legal shared slots claims its slot before a
+  // less-constrained group happens to take it first, leaving the tightly
+  // constrained one with nowhere to go (and, per the "never move once
+  // placed" rule, no way to recover it afterward).
+  const orderedGroups = [...groups.values()].sort(
+    (a, b) =>
+      countSharedLegalSlots(a, state, daysPerWeek, periodsPerDay) -
+      countSharedLegalSlots(b, state, daysPerWeek, periodsPerDay)
+  );
+
+  for (const group of orderedGroups) {
     if (group.length < 2 || group.some((t) => t.placed)) continue;
 
     const levels = createRelaxationLevels();
