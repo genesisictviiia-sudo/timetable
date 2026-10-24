@@ -687,20 +687,129 @@ function resolveGroupedTrayBySwapping(instances, state, daysPerWeek, periodsPerD
 }
 
 const SWAP_TRIALS_PER_CLASS = 60;
+const SWAP_CHAIN_MAX_DEPTH = 3;
 
 /**
- * Final tray-clearing pass. For each class with leftover (tray) cards:
- * take each card and look for an occupied slot in that class where the card
- * could legally sit if the occupant moved out. If found, swap — the tray card
- * takes the slot and the displaced card goes back into the tray queue, then
- * gets the same treatment (a direct free slot first, then its own swap).
- * Repeats until the class's tray is empty or the trial budget runs out, then
- * moves on to the next class.
+ * Is `classId`'s (day, period) cell protected from being used as a chain
+ * step's displacement target or landing spot? Only the class-teacher's
+ * period-1 slot is protected here (fixed/grouped occupants are checked by
+ * the caller, since that needs the occupant itself, not just the cell).
+ */
+function isProtectedSlot(period, state) {
+  return period === 0 && state.schoolClassTeacherFirstPeriod;
+}
+
+/**
+ * Depth-first search for a chain that gets `task` (and everything it
+ * displaces along the way) onto the grid. At each step: try a direct empty
+ * cell first (chain ends here); failing that, try displacing an occupant of
+ * this class and recursively find THAT occupant a home too — e.g. "ENG
+ * takes EVS's slot, EVS moves to the empty cell" is a depth-1 chain; longer
+ * chains (ENG → EVS's slot, EVS → MAT's slot, MAT → empty cell) are tried up
+ * to SWAP_CHAIN_MAX_DEPTH before giving up.
+ *
+ * The grid is mutated tentatively during the search (occupants removed while
+ * exploring) and restored on any failed branch, so a partial/failed search
+ * never leaves the timetable in an inconsistent state. On success, every
+ * card in the chain is left in its NEW slot already placed — the caller
+ * does not need to re-apply anything.
+ *
+ * `excludeCells` prevents a chain from reusing the same cell twice (which
+ * would make no sense and could loop).
+ */
+function searchSwapChain(task, instances, classId, state, daysPerWeek, periodsPerDay, flags, allowDisplaceRestricted, depth, excludeCells) {
+  // 1) A direct empty cell ends the chain successfully.
+  for (let day = 0; day < daysPerWeek; day++) {
+    for (let period = 0; period < periodsPerDay; period++) {
+      const key = `${day}|${period}`;
+      if (excludeCells.has(key)) continue;
+      if (state.classGrids[classId][day][period]) continue;
+      if (isProtectedSlot(period, state)) continue;
+      if (canPlace(task, day, period, state, flags)) {
+        // Relaxation accounting for the whole chain happens once in the
+        // caller (resolveTrayBySwapping), keyed off which ladder level
+        // succeeded — individual steps here are placed without their own
+        // separate levelId to avoid double-counting.
+        placeLesson(task, day, period, state, null);
+        return [{ task, day, period }];
+      }
+    }
+  }
+
+  if (depth >= SWAP_CHAIN_MAX_DEPTH) return null;
+
+  // 2) Try displacing an occupant and finding IT a home recursively.
+  for (let day = 0; day < daysPerWeek; day++) {
+    for (let period = 0; period < periodsPerDay; period++) {
+      const key = `${day}|${period}`;
+      if (excludeCells.has(key)) continue;
+      if (isProtectedSlot(period, state)) continue;
+
+      const cell = state.classGrids[classId][day][period];
+      if (!cell) continue;
+
+      const occupant = instances.find(
+        (t) => t.placed && t.classId === classId && t.placedDay === day && t.placedPeriod === period
+      );
+      if (!occupant || occupant.groupId || occupant.fixed) continue;
+      if (occupant.subject === task.subject && occupant.lessonId === task.lessonId) continue;
+      if (!allowDisplaceRestricted && (isSubjectRestricted(occupant, state) || isTeacherRestricted(occupant, state))) {
+        continue;
+      }
+
+      removeLesson(occupant, state);
+      if (!canPlace(task, day, period, state, flags)) {
+        placeLesson(occupant, day, period, state, null);
+        continue;
+      }
+
+      const nextExclude = new Set(excludeCells);
+      nextExclude.add(key);
+      const subChain = searchSwapChain(
+        occupant,
+        instances,
+        classId,
+        state,
+        daysPerWeek,
+        periodsPerDay,
+        flags,
+        allowDisplaceRestricted,
+        depth + 1,
+        nextExclude
+      );
+
+      if (subChain) {
+        placeLesson(task, day, period, state, null);
+        return [{ task, day, period }, ...subChain];
+      }
+
+      // Dead end — put the occupant back exactly where it was and try the next cell.
+      placeLesson(occupant, day, period, state, null);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Final tray-clearing pass. For each class with leftover (tray) cards, finds
+ * a chain of swaps that lands the stuck card on the grid — a direct free
+ * cell if one exists, or a short sequence like "this card takes an occupied
+ * slot, and whatever it displaced moves into the slot that's actually free"
+ * (and deeper chains, up to SWAP_CHAIN_MAX_DEPTH), rather than only ever
+ * trying a single swap and hoping the displaced card finds its own way home
+ * later. A chain is only ever committed once it's fully verified to resolve
+ * every card involved — nothing is left half-displaced.
+ *
+ * Two tiers per card: first without touching any time-off restricted
+ * lesson, then — only if that fails outright — allowing a restricted lesson
+ * to be displaced too, so a genuinely resolvable tray never gets left stuck
+ * just because the only path ran through a mildly-restricted lesson.
  *
  * Multi-class (grouped) lessons are excluded on both sides — they must occupy
  * one shared slot across every class in the group, so single-class swaps
- * would tear the group apart. Class-teacher period-1 occupants are protected
- * while that school rule is on.
+ * would tear the group apart (handled separately). Fixed lessons and the
+ * class-teacher's period-1 slot (while that rule is on) are never displaced.
  */
 function resolveTrayBySwapping(instances, state, daysPerWeek, periodsPerDay, runSeed) {
   const levels = createRelaxationLevels();
@@ -719,50 +828,31 @@ function resolveTrayBySwapping(instances, state, daysPerWeek, periodsPerDay, run
       trials++;
       if (task.placed) continue;
 
-      // A direct free slot may have opened up since the earlier passes.
-      if (tryPlaceTaskRandom(task, state, daysPerWeek, periodsPerDay, taskPlacementSeed(task, 300 + trials, runSeed))) {
-        continue;
-      }
-
-      // Try to swap into an occupied slot of this class.
-      const slots = shuffleSlots(
-        buildAllSlots(daysPerWeek, periodsPerDay),
-        taskPlacementSeed(task, 400 + trials, runSeed)
-      );
-      let swapped = false;
-
-      for (const level of levels) {
-        for (const { day, period } of slots) {
-          const cell = state.classGrids[classId][day][period];
-          if (!cell) continue;
-
-          // Protect the class teacher's first period while the rule is on.
-          if (period === 0 && state.schoolClassTeacherFirstPeriod) continue;
-
-          const occupant = instances.find(
-            (t) => t.placed && t.classId === classId && t.placedDay === day && t.placedPeriod === period
+      let resolved = false;
+      for (const allowDisplaceRestricted of [false, true]) {
+        if (resolved) break;
+        for (const level of levels) {
+          const chain = searchSwapChain(
+            task,
+            instances,
+            classId,
+            state,
+            daysPerWeek,
+            periodsPerDay,
+            level.flags,
+            allowDisplaceRestricted,
+            0,
+            new Set()
           );
-          // Grouped lessons stay put; identical lessons gain nothing by swapping.
-          if (!occupant || occupant.groupId) continue;
-          if (occupant.subject === task.subject && occupant.lessonId === task.lessonId) continue;
-          // Lessons whose subject or teacher has a special time-off window were
-          // deliberately placed in one of their few legal slots — never displace them.
-          if (isSubjectRestricted(occupant, state) || isTeacherRestricted(occupant, state)) continue;
-
-          removeLesson(occupant, state);
-          if (canPlace(task, day, period, state, level.flags)) {
-            placeLesson(task, day, period, state, level.id === "strict" ? null : level.id);
-            queue.push(occupant); // displaced card goes to the tray queue
-            swapped = true;
+          if (chain) {
+            if (level.id !== "strict") recordRelaxation(level.id, state);
+            resolved = true;
             break;
           }
-          // Not possible — put the occupant back exactly where it was.
-          placeLesson(occupant, day, period, state, null);
         }
-        if (swapped) break;
       }
-
-      // No direct slot and no swap — the card stays in the tray; move on.
+      // If not resolved, the card stays in the tray and the loop moves on —
+      // a genuine scheduling impossibility within the trial budget.
     }
   }
 }
