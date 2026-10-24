@@ -106,16 +106,27 @@ export default function PrintableTimetable({
                           </td>
                         );
                       }
+                      // Teacher timetable: class first (primary), subject below
+                      // (secondary) — the opposite order from the class timetable,
+                      // where the subject is what the reader cares about first.
+                      if (kind === "teacher") {
+                        return (
+                          <td key={col.slotIndex} className="print-grid__cell">
+                            <div className="print-grid__subject">{cell.classLabel || ""}</div>
+                            {cell.subject ? (
+                              <div className="print-grid__teachers">{cell.subject}</div>
+                            ) : null}
+                          </td>
+                        );
+                      }
+
                       return (
                         <td key={col.slotIndex} className="print-grid__cell">
                           <div className="print-grid__subject">{cell.subject || ""}</div>
-                          {kind === "class" && cell.teachers?.length ? (
+                          {cell.teachers?.length ? (
                             <div className="print-grid__teachers">
                               {cell.teachers.join(", ")}
                             </div>
-                          ) : null}
-                          {kind === "teacher" && cell.classLabel ? (
-                            <div className="print-grid__teachers">{cell.classLabel}</div>
                           ) : null}
                         </td>
                       );
