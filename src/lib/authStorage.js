@@ -25,6 +25,32 @@ export function getSession() {
 }
 
 /**
+ * Re-pull userType/profile from the server. The session set at login is
+ * otherwise frozen for the life of the JWT (30 days), so an admin-side
+ * plan change (e.g. free -> pro) would not take effect until the user
+ * manually logged out and back in.
+ */
+export async function refreshSession() {
+  if (!getToken()) return null;
+  try {
+    const data = await api.get("/auth/me");
+    const existing = readSession();
+    const session = {
+      ...existing,
+      email: data.email,
+      userId: data.userId,
+      userType: data.userType || "free",
+      profile: data.profile || existing?.profile || {},
+    };
+    writeSession(session);
+    return session;
+  } catch (err) {
+    console.warn("[auth] Could not refresh session from server:", err.message);
+    return null;
+  }
+}
+
+/**
  * Step 1 of signup: call the backend to validate + generate OTP,
  * then send it via EmailJS. Returns { email, userId, emailDelivered, otp }.
  */

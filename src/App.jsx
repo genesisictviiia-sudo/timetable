@@ -9,7 +9,7 @@ import LoginPage from "./pages/LoginPage";
 import Logo from "./components/Logo";
 import UserAvatar from "./components/UserAvatar";
 import ProfileSettingsModal from "./components/ProfileSettingsModal";
-import { getCurrentUser, logout } from "./lib/authStorage";
+import { getCurrentUser, logout, refreshSession } from "./lib/authStorage";
 import { flushPendingSyncs, getSyncError, hydrateFromApi, onUserSessionStarted, subscribeSyncStatus } from "./lib/userDataStorage";
 import { sendSubscriptionEnquiry } from "./lib/sendResetEmail";
 import "./App.css";
@@ -215,7 +215,12 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     if (getCurrentUser()?.email) {
-      hydrateFromApi().finally(() => {
+      Promise.all([
+        hydrateFromApi(),
+        refreshSession().then((session) => {
+          if (!cancelled && session) setUser(session);
+        }),
+      ]).finally(() => {
         if (!cancelled) setHydrated(true);
       });
     }
