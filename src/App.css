@@ -2759,11 +2759,11 @@ td.warn {
   }
 
   .print-sheet--per-2 .print-grid {
-    font-size: 8pt;
+    font-size: 9.5pt;
   }
 
   .print-sheet--per-4 .print-grid {
-    font-size: 5pt;
+    font-size: 6pt;
     line-height: 1.08;
   }
 
@@ -2776,21 +2776,31 @@ td.warn {
     word-wrap: break-word;
   }
 
+  /* Per-2: trade most of the padding for larger text — same cell/column
+     size, since the table still fills the same fixed card dimensions. */
+  .print-sheet--per-2 .print-grid th,
+  .print-sheet--per-2 .print-grid td {
+    padding: 0.6mm 0.4mm;
+  }
+
+  /* Per-4: padding reduced to near zero so the reclaimed space goes
+     straight to font size — the 2×2 grid still fills the same fixed
+     card dimensions either way. */
   .print-sheet--per-4 .print-grid th,
   .print-sheet--per-4 .print-grid td {
-    padding: 0.35mm 0.25mm;
+    padding: 0.12mm 0.1mm;
     border-width: 0.5px;
   }
 
   .print-sheet--per-4 .print-grid__day-head {
     width: 7mm;
     max-width: 7mm;
-    font-size: 5pt;
+    font-size: 6pt;
   }
 
   .print-sheet--per-4 .print-grid__day-label {
-    font-size: 5pt;
-    padding: 0.3mm 0.2mm;
+    font-size: 6pt;
+    padding: 0.12mm 0.1mm;
   }
 
   .print-grid__day-head,
@@ -2822,11 +2832,11 @@ td.warn {
   }
 
   .print-sheet--per-4 .print-grid__period-name {
-    font-size: 5pt;
+    font-size: 6pt;
   }
 
   .print-sheet--per-4 .print-grid__period-time {
-    font-size: 3.5pt;
+    font-size: 4.5pt;
     margin-top: 0.2mm;
     line-height: 1.05;
   }
@@ -2857,11 +2867,11 @@ td.warn {
   .print-sheet--per-4 .print-grid__break-cell {
     width: 1.4em;
     max-width: 1.4em;
-    padding: 0.3mm 0.15mm !important;
+    padding: 0.12mm 0.08mm !important;
   }
 
   .print-sheet--per-4 .print-grid__break-label {
-    font-size: 5pt;
+    font-size: 6pt;
   }
 
   .print-grid__break-time {
@@ -2876,7 +2886,7 @@ td.warn {
   }
 
   .print-sheet--per-4 .print-grid__break-time {
-    font-size: 3.5pt;
+    font-size: 4.5pt;
     margin-top: 0.8mm;
   }
 
@@ -2904,12 +2914,12 @@ td.warn {
   }
 
   .print-sheet--per-4 .print-grid__subject {
-    font-size: 5pt;
+    font-size: 6pt;
     line-height: 1.08;
   }
 
   .print-sheet--per-4 .print-grid__teachers {
-    font-size: 4pt;
+    font-size: 5pt;
     margin-top: 0.2mm;
     line-height: 1.05;
   }
