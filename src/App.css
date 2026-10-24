@@ -55,6 +55,19 @@ body {
   flex-direction: column;
 }
 
+.sync-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #fef3c7;
+  color: #92400e;
+  border-bottom: 1px solid #fcd34d;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
 /* Top title bar — modern SaaS navbar */
 .top-bar {
   position: relative;

@@ -10,7 +10,7 @@ import Logo from "./components/Logo";
 import UserAvatar from "./components/UserAvatar";
 import ProfileSettingsModal from "./components/ProfileSettingsModal";
 import { getCurrentUser, logout } from "./lib/authStorage";
-import { hydrateFromApi, onUserSessionStarted } from "./lib/userDataStorage";
+import { flushPendingSyncs, getSyncError, hydrateFromApi, onUserSessionStarted, subscribeSyncStatus } from "./lib/userDataStorage";
 import { sendSubscriptionEnquiry } from "./lib/sendResetEmail";
 import "./App.css";
 
@@ -174,6 +174,30 @@ function PrintGuard({ userType }) {
   return null;
 }
 
+function SyncStatusBanner() {
+  const [error, setError] = useState(() => getSyncError());
+  const [retrying, setRetrying] = useState(false);
+
+  useEffect(() => subscribeSyncStatus(setError), []);
+
+  if (!error) return null;
+
+  const retry = () => {
+    setRetrying(true);
+    flushPendingSyncs();
+    setTimeout(() => setRetrying(false), 1500);
+  };
+
+  return (
+    <div className="sync-error-banner" role="alert">
+      <span>⚠ {error}</span>
+      <button type="button" className="btn btn-ghost btn--sm" onClick={retry} disabled={retrying}>
+        {retrying ? "Retrying…" : "Retry now"}
+      </button>
+    </div>
+  );
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [user, setUser] = useState(() => {
@@ -260,6 +284,7 @@ function App() {
   return (
     <div className={`app${isPaid ? "" : " app--free"}`}>
       <PrintGuard userType={userType} />
+      <SyncStatusBanner />
 
       <header className="top-bar">
         <div className="top-bar-brand">

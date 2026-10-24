@@ -55,6 +55,29 @@ function requireActiveUserEmail() {
 }
 
 /**
+ * Cloud-sync status, so the UI can tell the user when their changes are
+ * NOT reaching the database instead of failing silently (a real outage —
+ * the API being briefly unreachable — previously just logged a console
+ * warning and looked identical to a successful save).
+ */
+const syncStatusListeners = new Set();
+let lastSyncError = null;
+
+export function getSyncError() {
+  return lastSyncError;
+}
+
+export function subscribeSyncStatus(listener) {
+  syncStatusListeners.add(listener);
+  return () => syncStatusListeners.delete(listener);
+}
+
+function setSyncError(message) {
+  lastSyncError = message;
+  for (const listener of syncStatusListeners) listener(lastSyncError);
+}
+
+/**
  * Sync a single key to the backend — debounced per key so rapid changes
  * (e.g. typing in a form) produce one write instead of one per keystroke.
  * localStorage is always written immediately; only the server PUT is delayed.
@@ -69,9 +92,13 @@ function flushSyncKey(baseKey) {
   clearTimeout(pendingSyncTimers.get(baseKey));
   pendingSyncTimers.delete(baseKey);
   if (value === undefined || !getToken()) return;
-  api.put(`/api/data/${encodeURIComponent(baseKey)}`, value).catch((err) => {
-    console.warn(`[sync] Failed to sync "${baseKey}" to server:`, err.message);
-  });
+  api
+    .put(`/api/data/${encodeURIComponent(baseKey)}`, value)
+    .then(() => setSyncError(null))
+    .catch((err) => {
+      console.warn(`[sync] Failed to sync "${baseKey}" to server:`, err.message);
+      setSyncError("Could not save your latest changes to the cloud. They are kept on this device only until the connection is restored.");
+    });
 }
 
 function syncKeyToApi(baseKey, value) {
@@ -129,8 +156,10 @@ export async function hydrateFromApi() {
     for (const [key, value] of Object.entries(allData)) {
       localStorage.setItem(scopedKey(email, key), JSON.stringify(value));
     }
+    setSyncError(null);
   } catch (err) {
     console.warn("[hydrate] Could not load data from server:", err.message);
+    setSyncError("Could not load your latest data from the cloud. You may be seeing an older version saved on this device.");
   }
 }
 
