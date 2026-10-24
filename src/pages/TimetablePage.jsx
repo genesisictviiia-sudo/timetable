@@ -11,6 +11,7 @@ import { buildPrintData } from "../lib/printTimetable";
 import { countTeacherLessons, listTeachersForView } from "../lib/teacherTimetableView";
 import { getAllottedLessonsPerWeek, getSchoolPeriodsPerWeek, removeCardToTray, toggleCardFixed } from "../lib/timetableValidation";
 import {
+  deleteSavedTimetable,
   listSavedTimetables,
   loadGeneratedTimetable,
   saveGeneratedTimetable,
@@ -154,6 +155,22 @@ export default function TimetablePage() {
     setViewMode("class");
     setWarning("");
   }, [savedTimetables, loadSelection]);
+
+  const handleDeleteSaved = useCallback(() => {
+    const entry = savedTimetables.find((e) => e.id === loadSelection);
+    if (!entry) {
+      alert("Select a saved timetable to delete.");
+      return;
+    }
+    if (!window.confirm(`Delete saved timetable "${entry.name}"? This cannot be undone.`)) return;
+    const next = deleteSavedTimetable(entry.id);
+    setSavedTimetables(next);
+    flushPendingSyncs();
+    setLoadSelection("");
+    if (activeSavedName.toLowerCase() === entry.name.toLowerCase()) {
+      setActiveSavedName("");
+    }
+  }, [savedTimetables, loadSelection, activeSavedName]);
 
   const {
     initialCheck,
@@ -412,6 +429,9 @@ export default function TimetablePage() {
               </select>
               <button type="button" className="btn btn-outline btn--sm" onClick={handleLoadSaved}>
                 Load
+              </button>
+              <button type="button" className="btn btn-outline btn--sm" onClick={handleDeleteSaved}>
+                Delete
               </button>
             </>
           )}
